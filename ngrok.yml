@@ -1,0 +1,13 @@
+version: "2"
+authtoken: 36EfJ5rnD2FcpPbonUMKZZ23v0r_6YBr4vTmptTSLp467aciE
+
+tunnels:
+# 1. Java Desktop Aplikace (TCP)
+  java-app:
+    proto: tcp
+    addr: 5555
+  
+  # 2. WebSocket Chat (Data) - Backend
+  chat-data:
+    proto: http
+    addr: 8887

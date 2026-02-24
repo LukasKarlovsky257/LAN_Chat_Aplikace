@@ -1,0 +1,557 @@
+package org.example;
+
+import org.example.managers.CryptoRSA;
+import org.example.managers.CryptoUtils;
+import org.example.managers.DatabaseManager;
+import org.example.threads.ServerThread;
+import org.example.web.ChatSocketServer;
+import org.example.web.WebServer;
+import org.java_websocket.WebSocket;
+
+import java.io.IOException;
+import java.io.PrintStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+
+public class Server {
+    // Desktop clients map (TCP) - Nick -> Thread
+    public static final Map<String, ServerThread> clients = Collections.synchronizedMap(new LinkedHashMap<>());
+
+    // Server logs
+    public static final List<String> serverLogs = new CopyOnWriteArrayList<>();
+    public static final long startTime = System.currentTimeMillis();
+
+    // Active rooms list & Temporary rooms list
+    public static final Set<String> activeRooms = Collections.synchronizedSet(new HashSet<>());
+    public static final Set<String> tempRooms = Collections.synchronizedSet(new HashSet<>());
+
+    static {
+        activeRooms.add("Lobby");
+    }
+
+    // Keys and Socket
+    public static PublicKey serverPublicKey;
+    public static PrivateKey serverPrivateKey;
+    private static ServerSocket serverSocket;
+    private static volatile boolean isRunning = false;
+    private static ExecutorService pool;
+
+    // Timer for self-destructing messages
+    public static final ScheduledExecutorService timer = Executors.newScheduledThreadPool(5);
+
+    // WebServer instances
+    public static ChatSocketServer chatServerInstance;
+
+    // GLOBAL MATH CHALLENGE VARIABLES
+    public static volatile Integer globalMathResult = null;
+    public static long lastMathTime = System.currentTimeMillis();
+    private static final long MATH_INTERVAL = 1000 * 60 * 2;
+
+    public static void main(String[] args) {
+        try {
+            if (serverPublicKey == null) {
+                System.out.println("🔐 Generating RSA keys at startup...");
+                KeyPair kp = CryptoUtils.generateKeyPair();
+                serverPublicKey = kp.getPublic();
+                serverPrivateKey = kp.getPrivate();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // Start GUI
+        ServerGUI.main(args);
+    }
+
+    // --- SERVER CONTROL (Start/Stop) ---
+
+    public static void startServer() {
+        if (isRunning) return;
+        isRunning = true;
+
+        new Thread(() -> {
+            try {
+                System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
+                System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
+
+                pool = Executors.newFixedThreadPool(50);
+
+                log("⏳ Initializing database...");
+                DatabaseManager.initDatabase();
+
+                log("🔐 Generating RSA keys for Desktop...");
+                if (serverPublicKey == null) {
+                    KeyPair kp = CryptoUtils.generateKeyPair();
+                    serverPublicKey = kp.getPublic();
+                    serverPrivateKey = kp.getPrivate();
+                }
+
+                log("🔐 Generating RSA keys for Web...");
+                CryptoRSA.init();
+
+                log("🌐 Starting WebSocket Server (Port 8887)...");
+                chatServerInstance = new ChatSocketServer(8887);
+                chatServerInstance.start();
+
+                log("🌍 Starting WebSite Server (Port 8080)...");
+                WebServer.start();
+
+                log("🖥️ Starting TCP Server (Port 5555)...");
+                serverSocket = new ServerSocket(5555);
+
+                log("🚀 SERVER IS ONLINE AND READY!");
+                log("   --> TCP Server:  Port 5555");
+                log("   --> Web Chat:    Port 8887");
+                log("   --> Web Admin:   Port 8080");
+
+                while (isRunning) {
+                    try {
+                        Socket socket = serverSocket.accept();
+                        pool.execute(new ServerThread(socket));
+                    } catch (IOException e) {
+                        if (isRunning) log("Socket error: " + e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                log("CRITICAL SERVER ERROR: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    public static void stopServer() {
+        if (!isRunning) return;
+        isRunning = false;
+
+        log("🛑 Stopping server...");
+
+        // 1. Stop WebServer
+        WebServer.stop();
+
+        // 2. Stop WebSocket Server
+        if (chatServerInstance != null) {
+            try {
+                chatServerInstance.stop();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        // 3. Disconnect Desktop clients
+        synchronized (clients) {
+            for (ServerThread client : clients.values()) {
+                client.sendEncryptedMessage("DISCONNECT:🛑 Server is shutting down.");
+                client.disconnect();
+            }
+            clients.clear();
+        }
+
+        // 4. Close TCP Socket
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // 5. Stop pools
+        if (pool != null) pool.shutdownNow();
+        timer.shutdownNow();
+
+        log("Server is off.");
+    }
+
+    // --- LOGGING ---
+
+    public static void log(String msg) {
+        String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+        String formatted = "[" + time + "] " + msg;
+        System.out.println(formatted);
+        serverLogs.add(formatted);
+
+        if (serverLogs.size() > 5000) {
+            serverLogs.remove(0);
+        }
+    }
+
+    public static int getOnlineCount() {
+        return clients.size() + (chatServerInstance != null ? ChatSocketServer.webClients.size() : 0);
+    }
+
+    public static String[] getUserListWithLevels() {
+        Set<String> allUsers = new HashSet<>(clients.keySet());
+        if (chatServerInstance != null) {
+            allUsers.addAll(ChatSocketServer.webClients.values());
+        }
+
+        String[] result = new String[allUsers.size()];
+        int i = 0;
+        for (String user : allUsers) {
+            int level = DatabaseManager.getUserLevel(user);
+            result[i++] = user + "|Lvl" + level;
+        }
+        return result;
+    }
+
+    // Zpětná kompatibilita (původní název metody)
+    public static String[] getUserList() {
+        return getUserListWithLevels();
+    }
+
+    // --- SENDING MESSAGES ---
+
+    public static void sendChatMessage(String senderNick, String message, String room) {
+        String time = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
+        int msgId = DatabaseManager.saveMessage(senderNick, message, time, room);
+
+        DatabaseManager.addXp(senderNick, 5); // 5 XP odměna
+        log("[" + room + "] " + senderNick + ": " + message);
+        broadcastRaw("MSG:" + msgId + ":" + senderNick + ":" + message, room);
+    }
+
+    public static void sendBurnMessage(String senderNick, String message, String room, int seconds) {
+        String time = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
+        int msgId = DatabaseManager.saveMessage(senderNick, message, time, room, true); // true = is_burnable
+
+        DatabaseManager.addXp(senderNick, 10); // Více XP za používání funkcí
+        log("🔥 [" + room + "] " + senderNick + " poslala TAJNOU zprávu (" + seconds + "s).");
+        broadcastRaw("BURN:" + msgId + ":" + senderNick + ":" + message + ":" + seconds, room);
+    }
+
+    public static void sendSystemBroadcast(String message, String room) {
+        String senderName = "SYSTEM";
+        String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+        int id = DatabaseManager.saveMessage(senderName, message, time, room);
+
+        log("📢 [" + room + "] SYSTEM: " + message);
+        broadcastRaw("MSG:" + id + ":" + senderName + ":" + message, room);
+    }
+
+    public static void broadcastRaw(String packet, String room) {
+        // 1. Desktop clients
+        synchronized (clients) {
+            for (ServerThread client : clients.values()) {
+                if (room.equals("ALL") || client.getCurrentRoom().equals(room)) {
+                    if (packet.startsWith("IMG:") || packet.startsWith("FILE:")) {
+                        client.sendRawMessage(packet);
+                    } else {
+                        client.sendEncryptedMessage(packet);
+                    }
+                }
+            }
+        }
+
+        // 2. Web clients
+        if (chatServerInstance != null) {
+            String targetRoom = room.equals("ALL") ? null : room;
+            chatServerInstance.broadcastToWeb(packet, targetRoom);
+        }
+    }
+
+    public static void processWebMessage(String sender, String message, String currentRoom) {
+        String time = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
+
+        if (message.startsWith("IMG:") || message.startsWith("FILE:")) {
+            String[] parts = message.split(":", 4);
+            if (parts.length == 4) {
+                DatabaseManager.saveFullMessage(sender, parts[2], parts[3], parts[0], time, currentRoom);
+                DatabaseManager.addXp(sender, 15);
+                broadcastRaw(message, currentRoom);
+            }
+        } else {
+            int id = DatabaseManager.saveMessage(sender, message, time, currentRoom);
+            DatabaseManager.addXp(sender, 5);
+            broadcastRaw("MSG:" + id + ":" + sender + ":" + message, currentRoom);
+        }
+        log("[WEB] " + sender + " -> " + currentRoom);
+    }
+
+    // --- ROOM MANAGEMENT ---
+
+    public static void createTempRoom(String roomName, String creator) {
+        if (!activeRooms.contains(roomName)) {
+            activeRooms.add(roomName);
+            tempRooms.add(roomName);
+            broadcastRoomList();
+            sendSystemBroadcast("⏱️ Dočasná místnost '" + roomName + "' vytvořena. Smaže se, jakmile ji všichni opustí.", roomName);
+        }
+    }
+
+    public static void checkTempRooms() {
+        Set<String> toDelete = new HashSet<>();
+
+        for (String room : tempRooms) {
+            boolean hasUsers = false;
+
+            // Check Desktop clients
+            synchronized (clients) {
+                for (ServerThread c : clients.values()) {
+                    if (c.getCurrentRoom().equals(room)) {
+                        hasUsers = true;
+                        break;
+                    }
+                }
+            }
+
+            // Check Web clients
+            if (!hasUsers && chatServerInstance != null) {
+                for (String r : ChatSocketServer.clientRooms.values()) {
+                    if (r.equals(room)) {
+                        hasUsers = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!hasUsers) {
+                toDelete.add(room);
+            }
+        }
+
+        for (String room : toDelete) {
+            deleteRoom(room);
+        }
+    }
+
+    public static void deleteMessage(int msgId) {
+        if (DatabaseManager.deleteMessage(msgId)) {
+            broadcastRaw("DELETE_MSG:" + msgId, "ALL");
+        }
+    }
+
+    public static void deleteRoom(String roomName) {
+        if (roomName.equals("Lobby")) return;
+        log("♻️ Deleting room: " + roomName);
+
+        synchronized (clients) {
+            for (ServerThread client : clients.values()) {
+                if (client.getCurrentRoom().equals(roomName)) {
+                    client.setCurrentRoom("Lobby");
+                    client.sendEncryptedMessage("ROOM_CHANGED:Lobby");
+                    client.sendEncryptedMessage("MSG:0:SYSTEM:⚠️ Room has been deleted.");
+                }
+            }
+        }
+
+        activeRooms.remove(roomName);
+        tempRooms.remove(roomName);
+        broadcastRoomList();
+        broadcastRaw("MSG:0:SYSTEM:Room " + roomName + " deleted.", "ALL");
+    }
+
+    public static void broadcastRoomList() {
+        if (activeRooms.isEmpty()) return;
+        List<String> list = new ArrayList<>();
+        for (String r : activeRooms) {
+            if (tempRooms.contains(r)) {
+                list.add(r + "|1");
+            } else {
+                list.add(r + "|0");
+            }
+        }
+        broadcastRaw("ROOM_LIST:" + String.join(",", list), "ALL");
+    }
+
+    public static void broadcastUserList() {
+        broadcastRaw("USERS:" + String.join(",", getUserListWithLevels()), "ALL");
+    }
+
+    // --- MODERATION (Kick, Ban, Mute) ---
+
+    public static void kickUser(String targetNick, String reason) {
+        if (DatabaseManager.isAdmin(targetNick)) return;
+
+        log("KICK: " + targetNick + " (" + reason + ")");
+        broadcastRaw("MSG:0:SYSTEM:👢 User " + targetNick + " was kicked.", "ALL");
+
+        ServerThread target = clients.get(targetNick);
+        if (target != null) {
+            target.sendEncryptedMessage("DISCONNECT:❌ BYL JSI ODPOJEN! Důvod: " + reason);
+            try {
+                Thread.sleep(200);
+            } catch (Exception ignored) {
+            }
+            target.disconnect();
+        }
+
+        WebSocket wsToKick = null;
+        for (Map.Entry<WebSocket, String> entry : ChatSocketServer.webClients.entrySet()) {
+            if (entry.getValue().equals(targetNick)) {
+                wsToKick = entry.getKey();
+                break;
+            }
+        }
+        if (wsToKick != null) {
+            wsToKick.close(1000, "KICKED: " + reason);
+        }
+
+        removeClient(targetNick);
+    }
+
+    public static boolean banUser(String targetNick, String adminName, String reason, long seconds) {
+        if (DatabaseManager.isAdmin(targetNick)) return false;
+
+        DatabaseManager.banUser(targetNick, adminName, reason, seconds);
+        DatabaseManager.deleteMessagesByUser(targetNick);
+        broadcastRaw("MSG:0:SYSTEM:🔨 User " + targetNick + " was banned.", "ALL");
+
+        ServerThread target = clients.get(targetNick);
+        if (target != null) {
+            target.sendEncryptedMessage("DISCONNECT:⛔ BAN! Reason: " + reason);
+            target.disconnect();
+        }
+
+        WebSocket wsToBan = null;
+        for (Map.Entry<WebSocket, String> entry : ChatSocketServer.webClients.entrySet()) {
+            if (entry.getValue().equals(targetNick)) {
+                wsToBan = entry.getKey();
+                break;
+            }
+        }
+        if (wsToBan != null) {
+            wsToBan.close(1000, "BANNED: " + reason);
+        }
+
+        removeClient(targetNick);
+        return true;
+    }
+
+    public static void muteUser(String targetNick, int seconds, String reason) {
+        if (DatabaseManager.isAdmin(targetNick)) return;
+
+        ServerThread target = clients.get(targetNick);
+        if (target != null) {
+            target.mute(seconds, reason);
+        }
+
+        log("MUTE: " + targetNick + " (" + seconds + "s)");
+    }
+
+    public static boolean unbanUser(String targetNick) {
+        log("UNBAN: " + targetNick);
+        return DatabaseManager.unbanUser(targetNick);
+    }
+
+    public static synchronized void registerClient(String nick, ServerThread client) {
+        clients.put(nick, client);
+        sendSystemBroadcast(nick + " joined.", "Lobby");
+        broadcastUserList();
+    }
+
+    public static synchronized void removeClient(String nick) {
+        if (clients.containsKey(nick)) {
+            clients.remove(nick);
+            sendSystemBroadcast(nick + " disconnected.", "Lobby");
+        }
+        checkTempRooms();
+        broadcastUserList();
+    }
+
+    public static void sendDirectMessage(String rawData, String room) {
+        if (rawData.startsWith("IMG:")) {
+            log("🖼️ Sending IMAGE to room: " + room);
+        } else if (rawData.startsWith("FILE:")) {
+            log("📁 Sending FILE to room: " + room);
+        }
+        broadcastRaw(rawData, room);
+    }
+
+    // --- GLOBAL MATH LOGIC ---
+    public static synchronized void checkAndGenerateMath() {
+        if (globalMathResult == null && (System.currentTimeMillis() - lastMathTime > MATH_INTERVAL)) {
+            java.util.Random rand = new java.util.Random();
+            int a = rand.nextInt(50) + 1;
+            int b = rand.nextInt(50) + 1;
+            int op = rand.nextInt(3);
+
+            String operator = "+";
+            switch (op) {
+                case 0:
+                    globalMathResult = a + b;
+                    operator = "+";
+                    break;
+                case 1:
+                    globalMathResult = a - b;
+                    operator = "-";
+                    break;
+                case 2:
+                    a = rand.nextInt(12) + 1;
+                    b = rand.nextInt(12) + 1;
+                    globalMathResult = a * b;
+                    operator = "*";
+                    break;
+            }
+
+            lastMathTime = System.currentTimeMillis();
+            sendSystemBroadcast("🧮 SOUTĚŽ: Vypočítej " + a + " " + operator + " " + b + " (Kdo dřív přijde, ten dřív mele!)", "Lobby");
+        }
+    }
+
+    public static synchronized boolean solveMath(String answer, String winnerNick) {
+        if (globalMathResult != null) {
+            try {
+                int val = Integer.parseInt(answer.trim());
+                if (val == globalMathResult) {
+                    DatabaseManager.addXp(winnerNick, 50);
+                    broadcastRaw("MSG:0:SYSTEM:🏆 " + winnerNick + " to dokázal! Odpověď byla " + globalMathResult + " (+50 XP).", "Lobby");
+                    globalMathResult = null;
+                    lastMathTime = System.currentTimeMillis();
+                    broadcastUserList();
+                    return true;
+                }
+            } catch (NumberFormatException e) {
+                // Not a number, ignore
+            }
+        }
+        return false;
+    }
+
+    // --- UNIVERZÁLNÍ SPRÁVA UŽIVATELŮ (WEB I DESKTOP) ---
+
+    public static boolean isUserOnline(String nick) {
+        if (clients.containsKey(nick)) return true;
+        if (chatServerInstance != null && ChatSocketServer.webClients.containsValue(nick)) return true;
+        return false;
+    }
+
+    public static boolean sendToUser(String targetNick, String rawPacket) {
+        boolean delivered = false;
+
+        // 1. Pokus o doručení do Desktop aplikace (TCP)
+        ServerThread targetDesktop = clients.get(targetNick);
+        if (targetDesktop != null) {
+            targetDesktop.sendEncryptedMessage(rawPacket);
+            delivered = true;
+        }
+
+        // 2. Pokus o doručení do Webové aplikace (WebSocket)
+        if (chatServerInstance != null) {
+            for (Map.Entry<WebSocket, String> entry : ChatSocketServer.webClients.entrySet()) {
+                if (entry.getValue().equals(targetNick)) {
+                    entry.getKey().send(rawPacket);
+                    delivered = true;
+                    break;
+                }
+            }
+        }
+
+        return delivered;
+    }
+
+    public static void whisper(ServerThread sender, String targetNick, String message) {
+        String formattedMsgRx = "🕵️ (šeptá ti): " + message;
+        String formattedMsgTx = "🕵️ (šeptáš pro " + targetNick + "): " + message;
+    }
+}

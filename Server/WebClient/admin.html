@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="cs" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAN Chat - Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #36393f;
+            --bg-sidebar: #2f3136;
+            --bg-dark: #202225;
+            --accent: #5865F2;
+            --danger: #ed4245;
+            --success: #3ba55d;
+            --warning: #faa61a;
+        }
+        body { background-color: var(--bg-base); color: #dcddde; font-family: 'Inter', sans-serif; }
+
+        /* Navbar */
+        .navbar { background-color: var(--bg-dark) !important; border-bottom: 1px solid #1a1b1e !important; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .navbar-brand { font-weight: 800; letter-spacing: 1px; color: var(--accent) !important; }
+
+        /* Karty */
+        .card { background-color: var(--bg-sidebar); border: 1px solid #1f2124; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .card-header { background-color: var(--bg-dark); border-bottom: 1px solid #1f2124; font-weight: 600; text-transform: uppercase; font-size: 13px; letter-spacing: 0.5px; padding: 15px; }
+
+        /* Statistiky */
+        .stat-card { transition: 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); }
+        .stat-value { font-weight: 800; font-size: 2rem; }
+
+        /* Konzole */
+        .log-box {
+            background: #000; color: #0f0; font-family: 'Consolas', monospace;
+            padding: 15px; height: 500px; overflow-y: scroll;
+            border-radius: 0 0 8px 8px; font-size: 13px; line-height: 1.5;
+        }
+        .log-line { border-bottom: 1px solid #111; padding: 3px 0; }
+        .log-err { color: #ff4a4a; font-weight: bold; }
+        .log-sys { color: #58a6ff; }
+        .log-join { color: #3ba55d; }
+        .log-adm { color: #c678dd; font-weight: bold; }
+
+        /* Seznamy */
+        .list-group-item { background-color: transparent; border-color: #40444b; color: #dcddde; padding: 12px 15px; }
+        .btn-icon { display: inline-flex; align-items: center; justify-content: center; padding: 4px 8px; font-size: 18px; }
+
+        /* Overlay */
+        #offline-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; backdrop-filter: blur(5px); }
+        #offline-overlay h1 { color: var(--danger); font-weight: 900; letter-spacing: 2px; }
+    </style>
+</head>
+<body>
+
+<div id="offline-overlay">
+    <span class="material-icons" style="font-size: 64px; color: var(--danger); margin-bottom: 20px;">wifi_off</span>
+    <h1>SERVER JE OFFLINE</h1>
+    <p class="text-muted mt-2">Čekám na obnovení spojení...</p>
+</div>
+
+<nav class="navbar navbar-dark mb-4 p-3">
+    <div class="container d-flex justify-content-between align-items-center">
+        <span class="navbar-brand d-flex align-items-center gap-2">
+            <span class="material-icons">admin_panel_settings</span> LAN CHAT ADMIN
+        </span>
+        <div>
+            <a href="/app.html" class="btn btn-sm btn-outline-light me-2 d-inline-flex align-items-center gap-1"><span class="material-icons" style="font-size: 16px;">forum</span> Otevřít Chat</a>
+            <a href="/download-logs" class="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1"><span class="material-icons" style="font-size: 16px;">download</span> Stáhnout Logy</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container pb-5">
+    <div class="row mb-4 g-3">
+        <div class="col-md-4">
+            <div class="card stat-card text-center h-100">
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <h6 class="text-muted fw-bold">ONLINE UŽIVATELÉ</h6>
+                    <div class="stat-value" style="color: var(--success);" id="statOnline">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stat-card text-center h-100">
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <h6 class="text-muted fw-bold">UPTIME SERVERU</h6>
+                    <div class="stat-value text-info" id="statUptime">00:00:00</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stat-card text-center h-100">
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <h6 class="text-muted fw-bold">ZAZNAMENANÉ AKCE</h6>
+                    <div class="stat-value" style="color: var(--warning);" id="statLogs">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4 d-flex flex-column gap-4">
+
+            <div class="card d-flex flex-column" style="max-height: 400px;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><span class="material-icons align-middle me-1" style="font-size: 18px;">people</span> Aktivní relace</span>
+                </div>
+                <div class="card-body p-0 overflow-auto">
+                    <ul class="list-group list-group-flush" id="userList"></ul>
+                </div>
+                <div class="card-footer bg-dark border-top-0 p-3">
+                    <div class="input-group">
+                        <input type="text" id="bcInput" class="form-control bg-dark text-light border-secondary" placeholder="Globální oznámení..." onkeyup="if(event.key==='Enter') sendBroadcast()">
+                        <button onclick="sendBroadcast()" class="btn btn-primary d-flex align-items-center"><span class="material-icons">campaign</span></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card d-flex flex-column" style="max-height: 300px;">
+                <div class="card-header text-danger d-flex justify-content-between align-items-center">
+                    <span><span class="material-icons align-middle me-1" style="font-size: 18px;">gavel</span> Zabanovaní</span>
+                </div>
+                <div class="card-body p-0 overflow-auto">
+                    <ul class="list-group list-group-flush" id="banList"></ul>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card h-100 shadow-lg border-0">
+                <div class="card-header bg-black text-light d-flex justify-content-between align-items-center border-bottom-0">
+                    <span class="d-flex align-items-center gap-2"><span class="material-icons text-success">terminal</span> Live Console</span>
+                    <span class="badge bg-success position-relative" style="animation: pulse 2s infinite;">LIVE</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="log-box" id="logBox"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+</style>
+
+<script>
+    // Značka nahrazená Javou
+    const START_TIME = {{START_TIME}};
+
+    // Uptime
+    setInterval(() => {
+        let diff = Math.floor((Date.now() - START_TIME) / 1000);
+        let h = Math.floor(diff / 3600).toString().padStart(2,'0');
+        let m = Math.floor((diff % 3600) / 60).toString().padStart(2,'0');
+        let s = (diff % 60).toString().padStart(2,'0');
+        document.getElementById('statUptime').innerText = `${h}:${m}:${s}`;
+    }, 1000);
+
+    // Refresh dat z API
+    function refreshData() {
+        fetch('/api/data').then(r => r.json()).then(data => {
+            document.getElementById('offline-overlay').style.display = 'none';
+            document.getElementById('statOnline').innerText = data.online;
+            document.getElementById('statLogs').innerText = data.logCount;
+
+            // LOGY
+            const logBox = document.getElementById('logBox');
+            const wasBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 50;
+            logBox.innerHTML = data.logs.map(l => {
+                let c = '';
+                if(l.includes("ERR")||l.includes("BAN")||l.includes("VIRUS")) c='log-err';
+                else if(l.includes("SYS")) c='log-sys';
+                else if(l.includes("připojil")) c='log-join';
+                else if(l.includes("ADMIN")) c='log-adm';
+                return `<div class="log-line ${c}">${l}</div>`;
+            }).join('');
+            if(wasBottom) logBox.scrollTop = logBox.scrollHeight;
+
+            // ONLINE USERS
+            const uList = document.getElementById('userList');
+            if(data.users.length === 0) uList.innerHTML = "<li class='list-group-item text-muted text-center py-4'>Nikdo není online</li>";
+            else uList.innerHTML = data.users.map(u => `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold text-light d-flex align-items-center gap-2">
+                        <span style="display:inline-block;width:10px;height:10px;background:var(--success);border-radius:50%;"></span> ${u}
+                    </span>
+                    <div class="btn-group">
+                        <button onclick="cmd('mute','${u}')" class="btn btn-outline-secondary btn-icon" title="Umlčet"><span class="material-icons fs-6">volume_off</span></button>
+                        <button onclick="cmd('kick','${u}')" class="btn btn-outline-warning btn-icon" title="Vyhodit"><span class="material-icons fs-6">logout</span></button>
+                        <button onclick="cmd('ban','${u}')" class="btn btn-outline-danger btn-icon" title="Ban"><span class="material-icons fs-6">gavel</span></button>
+                    </div>
+                </li>`).join('');
+
+            // ZABANOVANÍ
+            const bList = document.getElementById('banList');
+            if(data.banned.length === 0) bList.innerHTML = "<li class='list-group-item text-muted text-center py-4'>Žádné bany</li>";
+            else bList.innerHTML = data.banned.map(b => {
+                let expireInfo = (b.until === -1 || b.until === 0) ? "Trvalý ban" : "Do: " + new Date(b.until).toLocaleString();
+                return `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-danger fw-bold">${b.user}</span><br>
+                        <small class="text-muted d-block" style="line-height: 1.2;">${b.reason}</small>
+                        <small class="text-info" style="font-size: 11px;">${expireInfo}</small>
+                    </div>
+                    <button onclick="cmd('unban','${b.user}')" class="btn btn-success btn-icon" title="Odblokovat"><span class="material-icons fs-6">check</span></button>
+                </li>`
+            }).join('');
+
+        }).catch(() => document.getElementById('offline-overlay').style.display = 'flex');
+    }
+
+    setInterval(refreshData, 2000);
+    refreshData();
+
+    function cmd(a, t) {
+        let r="", d="";
+        if(a==='kick'||a==='ban'||a==='mute') { r=prompt("Důvod akce:"); if(r===null) return; }
+        if(a==='mute' || a==='ban') { d=prompt("Délka v sekundách? (-1 pro navždy)", "60"); if(d===null) return; }
+
+        fetch('/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `action=${a}&target=${t}&reason=${encodeURIComponent(r)}&duration=${d}`
+        });
+    }
+
+    function sendBroadcast() {
+        let input = document.getElementById('bcInput');
+        if(input.value) {
+            fetch('/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `action=broadcast&message=${encodeURIComponent(input.value)}`
+            });
+            input.value = '';
+        }
+    }
+</script>
+</body>
+</html>

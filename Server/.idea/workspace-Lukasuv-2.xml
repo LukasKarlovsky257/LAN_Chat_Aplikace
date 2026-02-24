@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AnalysisUIOptions">
+    <option name="SCOPE_TYPE" value="3" />
+  </component>
+  <component name="ArtifactsWorkspaceSettings">
+    <artifacts-to-build>
+      <artifact name="Server:jar" />
+    </artifacts-to-build>
+  </component>
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="3066184f-4f75-4cd3-ba37-ee71a988b313" name="Changes" comment="" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7
+}</component>
+  <component name="ProjectId" id="35s7rVOKut6SVRCgAy2UioEOsvc" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Application.Server.executor&quot;: &quot;Run&quot;,
+    &quot;Application.ServerGUI.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Notification.DisplayName-DoNotAsk-WindowsDefender&quot;: &quot;Microsoft Defender may affect IDE&quot;,
+    &quot;Notification.DoNotAsk-WindowsDefender&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/KarlovskýLukáš/OneDrive - Střední odborná škola, Český Brod – Liblice/Maturitní Aplikace/Program/Server&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;Artifacts&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\Admin\OneDrive - Střední odborná škola, Český Brod – Liblice\Maturitní Práce\Program\Server\src\main\java\zaloha2712" />
+      <recent name="C:\Users\Admin\OneDrive - Střední odborná škola, Český Brod – Liblice\Maturitní Práce\Program\Server\src\main\java\zaloha2312" />
+      <recent name="C:\Users\KarlovskýLukáš\OneDrive - Střední odborná škola, Český Brod – Liblice\Maturitní Práce\Program\Server\src\main\java\zaloha1612" />
+      <recent name="C:\Users\KarlovskýLukáš\OneDrive - Střední odborná škola, Český Brod – Liblice\Maturitní Práce\Program\Server\src" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\KarlovskýLukáš\OneDrive - Střední odborná škola, Český Brod – Liblice\Maturitní Aplikace\Program\Server\WebClient" />
+      <recent name="C:\Users\KarlovskýLukáš\OneDrive - Střední odborná škola, Český Brod – Liblice\Maturitní Aplikace\Program\Server\src\main\java\org\example\web" />
+      <recent name="C:\Users\KarlovskýLukáš\OneDrive - Střední odborná škola, Český Brod – Liblice\Maturitní Práce\Program\Server" />
+      <recent name="C:\Users\KarlovskýLukáš\OneDrive - Střední odborná škola, Český Brod – Liblice\Maturitní Práce\Program\Server\src" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Application.Server">
+    <configuration name="Server" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="org.example.Server" />
+      <module name="Server" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="org.example.managers.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="ServerGUI" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="org.example.ServerGUI" />
+      <module name="Server" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="org.example.web.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Application.Server" />
+        <item itemvalue="Application.ServerGUI" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-9823dce3aa75-28b599e66164-intellij.indexing.shared.core-IU-242.23339.11" />
+        <option value="bundled-js-predefined-d6986cc7102b-5c90d61e3bab-JavaScript-IU-242.23339.11" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="3066184f-4f75-4cd3-ba37-ee71a988b313" name="Changes" comment="" />
+      <created>1763887124898</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1763887124898</updated>
+      <workItem from="1763887126025" duration="6042000" />
+      <workItem from="1764614395048" duration="1395000" />
+      <workItem from="1764745189228" duration="1535000" />
+      <workItem from="1764841110555" duration="103000" />
+      <workItem from="1764841230402" duration="2654000" />
+      <workItem from="1764944690165" duration="1142000" />
+      <workItem from="1765120122321" duration="1066000" />
+      <workItem from="1765880986418" duration="2138000" />
+      <workItem from="1765981790063" duration="1807000" />
+      <workItem from="1766308003439" duration="10726000" />
+      <workItem from="1766337350321" duration="4893000" />
+      <workItem from="1766399616847" duration="5016000" />
+      <workItem from="1766477256745" duration="642000" />
+      <workItem from="1766482738502" duration="6844000" />
+      <workItem from="1766497542833" duration="595000" />
+      <workItem from="1766830694432" duration="4086000" />
+      <workItem from="1766838779722" duration="4206000" />
+      <workItem from="1766845372373" duration="302000" />
+      <workItem from="1766851718631" duration="811000" />
+      <workItem from="1766852983096" duration="1624000" />
+      <workItem from="1766912980729" duration="660000" />
+      <workItem from="1766922911570" duration="1765000" />
+      <workItem from="1767086803752" duration="2125000" />
+      <workItem from="1767515180440" duration="3323000" />
+      <workItem from="1767522023042" duration="3618000" />
+      <workItem from="1768289124431" duration="804000" />
+      <workItem from="1768373890850" duration="647000" />
+      <workItem from="1768470037235" duration="446000" />
+      <workItem from="1768470624925" duration="320000" />
+      <workItem from="1769250842439" duration="1365000" />
+      <workItem from="1769276157886" duration="154000" />
+      <workItem from="1770377509748" duration="4152000" />
+      <workItem from="1770453090749" duration="2159000" />
+      <workItem from="1770544847562" duration="6966000" />
+      <workItem from="1770795986612" duration="1076000" />
+      <workItem from="1770889116424" duration="1556000" />
+      <workItem from="1770918677784" duration="1102000" />
+      <workItem from="1771067558763" duration="591000" />
+      <workItem from="1771139904538" duration="669000" />
+      <workItem from="1771171575016" duration="556000" />
+      <workItem from="1771172692581" duration="1978000" />
+      <workItem from="1771436324335" duration="731000" />
+      <workItem from="1771514462065" duration="1774000" />
+      <workItem from="1771665623649" duration="1158000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <ignored-roots>
+      <path value="$PROJECT_DIR$/.." />
+    </ignored-roots>
+  </component>
+</project>
