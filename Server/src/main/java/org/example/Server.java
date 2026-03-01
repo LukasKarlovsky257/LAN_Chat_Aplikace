@@ -167,7 +167,16 @@ public class Server {
         int i = 0;
         for (String user : allUsers) {
             int level = DatabaseManager.getUserLevel(user);
-            result[i++] = user + "|Lvl" + level;
+            String avatar = DatabaseManager.getAvatar(user); // 👈 TADY získáme avatar
+
+            StringBuilder sb = new StringBuilder(user).append("|Lvl").append(level);
+
+            // 👈 TADY ho přilepíme, pokud existuje
+            if (avatar != null && !avatar.isEmpty()) {
+                sb.append("~").append(avatar);
+            }
+
+            result[i++] = sb.toString();
         }
         return result;
     }
@@ -233,6 +242,32 @@ public class Server {
 
     public static void processWebMessage(String sender, String message, String currentRoom) {
         String time = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
+
+        // 👉 PŘIDÁNO: Zpracování avatara z WEBU
+        if (message.startsWith("SET_AVATAR:")) {
+            System.out.println("📸 LOG: Přijat požadavek na avatar z WEBU od: " + sender);
+            String base64 = message.substring(11);
+            try {
+                java.io.File avatarDir = new java.io.File("avatars");
+                if (!avatarDir.exists()) avatarDir.mkdirs();
+
+                byte[] imageBytes = java.util.Base64.getDecoder().decode(base64);
+                String fileName = sender + ".jpg";
+                java.io.File avatarFile = new java.io.File(avatarDir, fileName);
+                java.nio.file.Files.write(avatarFile.toPath(), imageBytes);
+
+                if (DatabaseManager.saveAvatar(sender, fileName)) {
+                    long timestamp = System.currentTimeMillis();
+                    broadcastRaw("UPDATE_AVATAR:" + sender + ":" + fileName + "?t=" + timestamp, currentRoom);
+                    System.out.println("📸 LOG: Avatar úspěšně uložen pro: " + sender);
+                }
+            } catch (Exception e) {
+                System.err.println("📸 ERROR: Chyba při ukládání avatara z webu: " + e.getMessage());
+            }
+            return; // 🛑 Důležité: Tady musíme skončit, aby se zpráva neuložila jako běžný text chatu!
+        }
+
+        // --- Zbytek tvé původní metody ---
         if (message.startsWith("IMG:") || message.startsWith("FILE:")) {
             String[] parts = message.split(":", 4);
             if (parts.length == 4) {

@@ -174,6 +174,45 @@ public class ServerThread implements Runnable {
             return;
         }
 
+        if (rawInput.startsWith("SET_AVATAR:")) {
+            System.out.println("📸 LOG: Přijat požadavek na avatar od uživatele: " + this.nick);
+            String base64 = rawInput.substring(11);
+            try {
+                // 1. Vytvoříme složku
+                File avatarDir = new File("avatars");
+                if (!avatarDir.exists()) {
+                    avatarDir.mkdirs();
+                    System.out.println("📸 LOG: Vytvořena složka pro avatary na cestě: " + avatarDir.getAbsolutePath());
+                }
+
+                // 2. Uložení na disk
+                byte[] imageBytes = Base64.getDecoder().decode(base64);
+                String fileName = this.nick + ".jpg";
+                File avatarFile = new File(avatarDir, fileName);
+                java.nio.file.Files.write(avatarFile.toPath(), imageBytes);
+                System.out.println("📸 LOG: Obrázek fyzicky uložen do: " + avatarFile.getAbsolutePath());
+
+                // 3. Uložení do DB
+                if (DatabaseManager.saveAvatar(this.nick, fileName)) {
+                    System.out.println("📸 LOG: Úspěšně zapsáno do databáze pro uživatele " + this.nick);
+                    long timestamp = System.currentTimeMillis();
+                    Server.sendDirectMessage("UPDATE_AVATAR:" + this.nick + ":" + fileName + "?t=" + timestamp, this.currentRoom);
+                } else {
+                    System.err.println("📸 ERROR: Metoda DatabaseManager.saveAvatar() vrátila FALSE! Jméno se neshoduje?");
+                }
+            } catch (Exception e) {
+                System.err.println("📸 CRITICAL ERROR: Chyba při zpracování avatara:");
+                e.printStackTrace();
+            }
+            return;
+        }
+
+        if (rawInput.startsWith("TYPING:")) {
+            String status = rawInput.substring(7);
+            Server.broadcastRaw("USER_TYPING:" + this.nick + ":" + status, this.currentRoom);
+            return;
+        }
+
         if (rawInput.startsWith("ZK:")) {
             Server.sendChatMessage(this.nick, rawInput, this.currentRoom);
             return;

@@ -101,6 +101,36 @@ public class ChatSocketServer extends WebSocketServer {
         if (nick == null) { conn.send("ERROR:Nepřihlášen"); return; }
         String currentRoom = clientRooms.getOrDefault(conn, "Lobby");
 
+        // 👉 PŘIDÁNO: Zpracování AVATARA přímo tady
+        if (message.startsWith("SET_AVATAR:")) {
+            System.out.println("📸 LOG: Přijat požadavek na avatar z WEBU od: " + nick);
+            String base64 = message.substring(11);
+            try {
+                java.io.File avatarDir = new java.io.File("avatars");
+                if (!avatarDir.exists()) avatarDir.mkdirs();
+
+                byte[] imageBytes = java.util.Base64.getDecoder().decode(base64);
+                String fileName = nick + ".jpg";
+                java.io.File avatarFile = new java.io.File(avatarDir, fileName);
+                java.nio.file.Files.write(avatarFile.toPath(), imageBytes);
+
+                if (DatabaseManager.saveAvatar(nick, fileName)) {
+                    long timestamp = System.currentTimeMillis();
+                    Server.broadcastRaw("UPDATE_AVATAR:" + nick + ":" + fileName + "?t=" + timestamp, currentRoom);
+                    System.out.println("📸 LOG: Avatar úspěšně uložen pro: " + nick);
+                }
+            } catch (Exception e) {
+                System.err.println("📸 ERROR: Chyba při ukládání avatara z webu: " + e.getMessage());
+            }
+            return; // Konec, tohle není zpráva do chatu
+        }
+
+        if (message.startsWith("TYPING:")) {
+            String status = message.substring(7);
+            Server.broadcastRaw("USER_TYPING:" + nick + ":" + status, currentRoom);
+            return;
+        }
+
         if (message.startsWith("GAME:WB:")) {
             if (message.startsWith("GAME:WB:CLOSE:")) {
                 String id = message.substring(14);

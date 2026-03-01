@@ -7,6 +7,7 @@ import org.example.Server;
 import org.example.managers.DatabaseManager;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -33,6 +34,26 @@ public class WebServer {
             server.createContext("/api/data", new ApiDataHandler());
             server.createContext("/action", new ActionHandler());
             server.createContext("/download-logs", new LogDownloadHandler());
+
+            // PŘIDÁME ROUTU PRO AVATARY:
+            server.createContext("/avatars", exchange -> {
+                String path = exchange.getRequestURI().getPath(); // Získá např. /avatars/admin.jpg
+                File file = new File(System.getProperty("user.dir"), path);
+
+                if (file.exists() && !file.isDirectory()) {
+                    exchange.sendResponseHeaders(200, file.length());
+                    try (OutputStream os = exchange.getResponseBody();
+                         FileInputStream fs = new FileInputStream(file)) {
+                        byte[] buffer = new byte[1024];
+                        int count;
+                        while ((count = fs.read(buffer)) != -1) {
+                            os.write(buffer, 0, count);
+                        }
+                    }
+                } else {
+                    exchange.sendResponseHeaders(404, -1);
+                }
+            });
 
             // Zvýšili jsme počet vláken na 50, aby se server jen tak nezahltil
             server.setExecutor(Executors.newFixedThreadPool(50));

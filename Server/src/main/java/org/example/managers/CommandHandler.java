@@ -102,9 +102,28 @@ public class CommandHandler {
             case "users":
             case "online":
             case "list":
-                String[] users = Server.getUserListWithLevels();
+                String[] onlineUsers = Server.getUserListWithLevels();
                 int count = Server.getOnlineCount();
-                client.sendEncryptedMessage("MSG:0:SYSTEM:Online (" + count + "): " + String.join(", ", users));
+                client.sendEncryptedMessage("MSG:0:SYSTEM:Online (" + count + "): " + String.join(", ", onlineUsers));
+
+                // Sestavení zprávy USERS: s avatary
+                StringBuilder sb = new StringBuilder("USERS:");
+                // Zde použijeme už existujícího pole onlineUsers (obsahuje např. "Karel|Lvl2")
+                for (String userInfo : onlineUsers) {
+                    // Získáme čisté jméno (odstraníme část s levelem)
+                    String u = userInfo.split("\\|")[0].trim();
+
+                    int level = DatabaseManager.getUserLevel(u);
+                    String avatar = DatabaseManager.getAvatar(u); // Načtení z DB
+
+                    sb.append(u).append("|Lvl").append(level);
+                    // Pokud má avatar, přidáme ho
+                    if (avatar != null && !avatar.isEmpty()) {
+                        sb.append("~").append(avatar);
+                    }
+                    sb.append(",");
+                }
+                client.sendEncryptedMessage(sb.toString());
                 break;
 
             case "msg":

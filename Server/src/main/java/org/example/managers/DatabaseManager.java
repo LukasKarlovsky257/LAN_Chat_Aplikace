@@ -20,6 +20,7 @@ public class DatabaseManager {
     }
 
     // --- 2. INICIALIZACE ---
+    // --- 2. INICIALIZACE ---
     public static void initDatabase() {
         String sqlUsers = "CREATE TABLE IF NOT EXISTS users (\n"
                 + " id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
@@ -32,7 +33,8 @@ public class DatabaseManager {
                 + " banned_by TEXT DEFAULT 'SYSTEM',\n"
                 + " ban_reason TEXT DEFAULT '',\n"
                 + " xp INTEGER DEFAULT 0,\n"
-                + " level INTEGER DEFAULT 1\n"
+                + " level INTEGER DEFAULT 1,\n"
+                + " avatar_base64 TEXT\n" // Nový sloupec pro avatary
                 + ");";
 
         String sqlMessages = "CREATE TABLE IF NOT EXISTS messages (\n"
@@ -65,6 +67,7 @@ public class DatabaseManager {
                 "ALTER TABLE users ADD COLUMN role INTEGER DEFAULT 0",
                 "ALTER TABLE users ADD COLUMN xp INTEGER DEFAULT 0",
                 "ALTER TABLE users ADD COLUMN level INTEGER DEFAULT 1",
+                "ALTER TABLE users ADD COLUMN avatar_base64 TEXT", // Migrace pro existující DB
                 "ALTER TABLE messages ADD COLUMN type TEXT DEFAULT 'TEXT'",
                 "ALTER TABLE messages ADD COLUMN file_data TEXT",
                 "ALTER TABLE messages ADD COLUMN is_burnable INTEGER DEFAULT 0"
@@ -397,5 +400,33 @@ public class DatabaseManager {
             e.printStackTrace();
         }
         return list;
+    }
+
+    // --- 7. AVATARY ---
+
+    public static boolean saveAvatar(String username, String base64Data) {
+        String sql = "UPDATE users SET avatar_base64 = ? WHERE username = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, base64Data);
+            pstmt.setString(2, username);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.out.println("Chyba při ukládání avatara: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public static String getAvatar(String username) {
+        String sql = "SELECT avatar_base64 FROM users WHERE username = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, username);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getString("avatar_base64");
+            }
+        } catch (SQLException e) {
+            System.out.println("Chyba při načítání avatara: " + e.getMessage());
+        }
+        return null;
     }
 }
