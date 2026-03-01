@@ -73,9 +73,7 @@ public class GameManager {
                 }
             }
             String turn = isPlayer1Turn ? player1 : player2;
-
-            // 🔥 ZDE JE TA MAGIE: Zabalíme zprávu do MSG:0:SYSTEM:, aby ji propustil Desktop klient!
-            return "MSG:0:SYSTEM:GAME:TTT:" + gameId + ":" + player1 + ":" + player2 + ":" + turn + ":" + sb.toString() + ":" + status;
+            return "GAME:TTT:" + gameId + ":" + player1 + ":" + player2 + ":" + turn + ":" + sb.toString() + ":" + status;
         }
     }
 
@@ -83,16 +81,24 @@ public class GameManager {
         if (command.startsWith("/ttt start ")) {
             String opponent = command.substring(11).trim();
 
-            // 🔥 TVRDÁ OCHRANA NA STRANĚ SERVERU: Hraní se sebou
             if (opponent.equalsIgnoreCase(nick)) {
                 Server.sendToUser(nick, "MSG:0:SYSTEM:❌ Nemůžeš hrát sám se sebou!");
+                return;
+            }
+
+            if (isPlayerInGame(nick)) {
+                Server.sendToUser(nick, "MSG:0:SYSTEM:❌ Už zrovna hraješ jinou hru!");
+                return;
+            }
+            if (isPlayerInGame(opponent)) {
+                Server.sendToUser(nick, "MSG:0:SYSTEM:❌ Hráč " + opponent + " je teď v jiné hře.");
                 return;
             }
 
             if (Server.isUserOnline(opponent)) {
                 TicTacToeGame newGame = new TicTacToeGame(nick, opponent);
                 activeTicTacToeGames.put(room, newGame);
-                Server.broadcastRaw(newGame.getGameStateData("PLAYING"), room);
+                Server.broadcastGame(newGame.getGameStateData("PLAYING"), room);
             } else {
                 Server.sendToUser(nick, "MSG:0:SYSTEM:Hráč " + opponent + " není online.");
             }
@@ -115,17 +121,17 @@ public class GameManager {
                     char winner = game.checkWin();
                     if (winner != '-') {
                         String winnerName = (winner == 'X') ? game.player1 : game.player2;
-                        Server.broadcastRaw(game.getGameStateData(winner == 'X' ? "WIN1" : "WIN2"), room);
+                        Server.broadcastGame(game.getGameStateData(winner == 'X' ? "WIN1" : "WIN2"), room);
                         Server.sendSystemBroadcast("🏆 Hráč " + winnerName + " vyhrál Piškvorky a získává 100 XP!", room);
                         DatabaseManager.addXp(winnerName, 100);
                         Server.broadcastUserList();
                         activeTicTacToeGames.remove(room);
                     } else if (game.isDraw()) {
-                        Server.broadcastRaw(game.getGameStateData("DRAW"), room);
+                        Server.broadcastGame(game.getGameStateData("DRAW"), room);
                         Server.sendSystemBroadcast("🤝 Piškvorky skončily remízou!", room);
                         activeTicTacToeGames.remove(room);
                     } else {
-                        Server.broadcastRaw(game.getGameStateData("PLAYING"), room);
+                        Server.broadcastGame(game.getGameStateData("PLAYING"), room);
                     }
                 } else {
                     Server.sendToUser(nick, "MSG:0:SYSTEM:❌ Neplatný tah nebo nejsi na řadě!");
@@ -134,5 +140,21 @@ public class GameManager {
                 Server.sendToUser(nick, "MSG:0:SYSTEM:Chyba formátu.");
             }
         }
+    }
+
+    public static boolean isPlayerInGame(String playerName) {
+        for (TicTacToeGame game : activeTicTacToeGames.values()) {
+            if (game.player1.equalsIgnoreCase(playerName) || game.player2.equalsIgnoreCase(playerName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 🔥 Nová metoda pro čisté startování
+    public static void startGame(String player1, String player2, String room) {
+        TicTacToeGame newGame = new TicTacToeGame(player1, player2);
+        activeTicTacToeGames.put(room, newGame);
+        Server.broadcastGame(newGame.getGameStateData("PLAYING"), room);
     }
 }

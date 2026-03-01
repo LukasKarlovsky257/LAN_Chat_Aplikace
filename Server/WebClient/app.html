@@ -7,7 +7,9 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 
     <script>
         const APP_CONFIG = {
@@ -69,6 +71,9 @@
             <li onclick="chat.createTempRoom()" style="color:#faa61a; padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.2s; border-radius: 5px;">
                 <span class="material-icons" style="font-size:18px">timer</span> <span>Dočasný kanál</span>
             </li>
+            <li onclick="chat.createPrivateRoom()" style="color:#ed4245; padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.2s; border-radius: 5px;">
+                <span class="material-icons" style="font-size:18px">lock</span> <span>Soukromý kanál</span>
+            </li>
         </ul>
 
         <div id="admin-logs-trigger" style="display:none">
@@ -89,6 +94,9 @@
                 <span id="my-nick">User</span>
                 <span id="my-role">#0000</span>
             </div>
+            <button onclick="ui.openSettings()" class="btn-icon" title="Nastavení" style="color: #b9bbbe;">
+                <span class="material-icons">settings</span>
+            </button>
             <button onclick="location.reload()" class="btn-icon" title="Odhlásit" style="color: var(--danger);">
                 <span class="material-icons">logout</span>
             </button>
@@ -112,11 +120,11 @@
 
             <div class="input-wrapper" style="position: relative;">
 
-                <button id="add-btn-trigger" class="btn-icon" title="Akce..." onclick="ui.openActionModal()">
+                <button id="add-btn-trigger" class="btn-icon add-circle-btn" title="Akce..." onclick="ui.openActionModal()">
                     <span class="material-icons" style="font-size: 26px; color: var(--text-normal);">add_circle</span>
                 </button>
 
-                <input type="text" id="msg-input" placeholder="Poslat zprávu do #Lobby..." autocomplete="off">
+                <input type="text" id="msg-input" maxlength="1000" placeholder="Poslat zprávu do #Lobby..." autocomplete="off">
 
                 <button onclick="chat.send()" class="btn-icon" style="color: var(--brand-experiment)" title="Odeslat zprávu">
                     <span class="material-icons">send</span>
@@ -147,6 +155,26 @@
     Pusť soubor pro nahrání 📂
 </div>
 
+<div id="modal-settings" class="modal">
+    <div class="modal-content" style="width: 350px; background: var(--bg-primary);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="margin:0; color:white; font-size: 18px;">⚙️ Nastavení Webu</h3>
+            <button onclick="ui.closeModals()" class="btn-icon"><span class="material-icons">close</span></button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 15px; color: var(--text-normal);">
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                <input type="checkbox" id="set-sound" style="width:auto; transform:scale(1.2);"> Přehrávat zvuky oznámení
+            </label>
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                <input type="checkbox" id="set-enter" style="width:auto; transform:scale(1.2);"> Odeslat zprávu klávesou Enter
+            </label>
+        </div>
+        <div style="display:flex; justify-content: flex-end; margin-top:25px;">
+            <button onclick="ui.saveSettings()" class="btn-primary" style="background:#3ba55c; width:auto; padding:8px 20px">Uložit nastavení</button>
+        </div>
+    </div>
+</div>
+
 <div id="modal-actions" class="modal">
     <div class="modal-content" style="width: 350px; background: var(--bg-primary);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -161,7 +189,7 @@
                 <span class="material-icons" style="color: #faa61a; font-size: 24px;">gif_box</span> Odeslat GIF
             </button>
             <button onclick="ui.closeModals(); ui.openGamesDialog();" class="btn-secondary" style="display:flex; align-items:center; justify-content:flex-start; gap:15px; font-size:16px; padding:12px 20px;">
-                <span class="material-icons" style="color: #5865F2; font-size: 24px;">sports_esports</span> Zahrát si hru
+                <span class="material-icons" style="color: #5865F2; font-size: 24px;">sports_esports</span> Herní Centrum
             </button>
         </div>
     </div>
@@ -199,11 +227,22 @@
             </h3>
             <button onclick="ui.closeModals()" class="btn-icon"><span class="material-icons">close</span></button>
         </div>
-        <p style="margin-bottom:15px; color:var(--text-muted); font-size:14px;">Zadej přesné jméno hráče, kterého chceš vyzvat na Piškvorky.</p>
+        <p style="margin-bottom:15px; color:var(--text-muted); font-size:14px;">Zadej jméno hráče pro hru (nebo nech prázdné pro volné plátno místnosti).</p>
         <input type="text" id="game-opponent-name" placeholder="Jméno soupeře" style="margin-bottom:25px; color:white; background:var(--bg-tertiary); border:1px solid rgba(0,0,0,0.2); padding:12px; border-radius:5px; width:100%;">
         <div style="display:flex; justify-content: flex-end; gap:10px">
-            <button onclick="ui.closeModals()" class="btn-secondary" style="width:auto; padding:8px 20px">Zrušit</button>
-            <button onclick="chat.startTicTacToe()" class="btn-primary" style="background:#3ba55c; color:white; width:auto; padding:8px 20px">Vyzvat hráče</button>
+            <button onclick="chat.startTicTacToe()" class="btn-primary" style="background:#46ff50; color:black; width:auto; padding:8px 20px">Piškvorky</button>
+            <button onclick="chat.startWhiteboard()" class="btn-primary" style="background:#5865F2; color:white; width:auto; padding:8px 20px">Kreslit (Whiteboard)</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-invite" class="modal">
+    <div class="modal-content" style="width: 400px; text-align:center;">
+        <h3 style="margin-top:0; color:white;">📩 Nová výzva!</h3>
+        <p id="invite-text" style="margin-bottom:25px; color:var(--text-muted); font-size:15px;"></p>
+        <div style="display:flex; justify-content: center; gap:10px">
+            <button onclick="ui.declineInvite()" class="btn-secondary" style="background: var(--danger); width:auto; padding:8px 20px; color:white; border:none;">Odmítnout</button>
+            <button onclick="ui.acceptInvite()" class="btn-primary" style="background: #3ba55c; width:auto; padding:8px 20px">Přijmout</button>
         </div>
     </div>
 </div>
@@ -212,9 +251,10 @@
     <div class="ctx-item" onclick="ctx.copyNick()">Kopírovat jméno</div>
     <div class="ctx-item" onclick="ctx.mention()">Zmínit (@)</div>
     <div class="ctx-item" onclick="ctx.whisper()">Šeptat (Soukromě)</div>
-    <div class="ctx-item" onclick="ctx.inviteToGame()">Vyzvat na hru</div>
+    <div class="ctx-item" id="ctx-invite" onclick="ctx.inviteToGame()">Vyzvat na hru</div>
+    <div class="ctx-item" id="ctx-roominvite" onclick="ctx.roomInvite()" style="color:#ed4245;">Pozvat do soukromé</div>
 
-    <hr style="border:0; border-top:1px solid #1e1f22; margin:4px 0">
+    <hr style="border:0; border-top:1px solid var(--bg-base); margin:4px 0">
 
     <div class="ctx-item danger" id="ctx-del" onclick="ctx.deleteMsg()">Smazat zprávu</div>
     <div class="ctx-item danger" id="ctx-kick" onclick="ctx.kick()">Vyhodit</div>
@@ -224,7 +264,7 @@
 
 <audio id="notify-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
 
-<script src="app.js"></script>
+<script src="app.js?v=99"></script>
 
 </body>
 </html>

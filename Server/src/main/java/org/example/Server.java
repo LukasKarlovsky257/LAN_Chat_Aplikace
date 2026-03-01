@@ -19,41 +19,43 @@ import java.security.PublicKey;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 public class Server {
-    // Desktop clients map (TCP) - Nick -> Thread
     public static final Map<String, ServerThread> clients = Collections.synchronizedMap(new LinkedHashMap<>());
-
-    // Server logs
     public static final List<String> serverLogs = new CopyOnWriteArrayList<>();
     public static final long startTime = System.currentTimeMillis();
 
-    // Active rooms list & Temporary rooms list
     public static final Set<String> activeRooms = Collections.synchronizedSet(new HashSet<>());
     public static final Set<String> tempRooms = Collections.synchronizedSet(new HashSet<>());
+
+    public static class PrivateRoom {
+        public String host;
+        public Set<String> allowedUsers = ConcurrentHashMap.newKeySet();
+        public PrivateRoom(String host) {
+            this.host = host;
+            this.allowedUsers.add(host);
+        }
+    }
+    public static final Map<String, PrivateRoom> privateRooms = new ConcurrentHashMap<>();
 
     static {
         activeRooms.add("Lobby");
     }
 
-    // Keys and Socket
     public static PublicKey serverPublicKey;
     public static PrivateKey serverPrivateKey;
     private static ServerSocket serverSocket;
     private static volatile boolean isRunning = false;
     private static ExecutorService pool;
 
-    // Timer for self-destructing messages
     public static final ScheduledExecutorService timer = Executors.newScheduledThreadPool(5);
-
-    // WebServer instances
     public static ChatSocketServer chatServerInstance;
 
-    // GLOBAL MATH CHALLENGE VARIABLES
     public static volatile Integer globalMathResult = null;
     public static long lastMathTime = System.currentTimeMillis();
     private static final long MATH_INTERVAL = 1000 * 60 * 2;
@@ -69,12 +71,8 @@ public class Server {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-        // Start GUI
         ServerGUI.main(args);
     }
-
-    // --- SERVER CONTROL (Start/Stop) ---
 
     public static void startServer() {
         if (isRunning) return;
@@ -86,7 +84,6 @@ public class Server {
                 System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
 
                 pool = Executors.newFixedThreadPool(50);
-
                 log("⏳ Initializing database...");
                 DatabaseManager.initDatabase();
 
@@ -111,9 +108,6 @@ public class Server {
                 serverSocket = new ServerSocket(5555);
 
                 log("🚀 SERVER IS ONLINE AND READY!");
-                log("   --> TCP Server:  Port 5555");
-                log("   --> Web Chat:    Port 8887");
-                log("   --> Web Admin:   Port 8080");
 
                 while (isRunning) {
                     try {
@@ -124,7 +118,6 @@ public class Server {
                     }
                 }
             } catch (Exception e) {
-                e.printStackTrace();
                 log("CRITICAL SERVER ERROR: " + e.getMessage());
             }
         }).start();
@@ -133,22 +126,12 @@ public class Server {
     public static void stopServer() {
         if (!isRunning) return;
         isRunning = false;
-
         log("🛑 Stopping server...");
 
-        // 1. Stop WebServer
         WebServer.stop();
-
-        // 2. Stop WebSocket Server
         if (chatServerInstance != null) {
-            try {
-                chatServerInstance.stop();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            try { chatServerInstance.stop(); } catch (Exception e) {}
         }
-
-        // 3. Disconnect Desktop clients
         synchronized (clients) {
             for (ServerThread client : clients.values()) {
                 client.sendEncryptedMessage("DISCONNECT:🛑 Server is shutting down.");
@@ -156,34 +139,18 @@ public class Server {
             }
             clients.clear();
         }
-
-        // 4. Close TCP Socket
-        try {
-            if (serverSocket != null && !serverSocket.isClosed()) {
-                serverSocket.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        // 5. Stop pools
+        try { if (serverSocket != null && !serverSocket.isClosed()) serverSocket.close(); } catch (IOException e) {}
         if (pool != null) pool.shutdownNow();
         timer.shutdownNow();
-
         log("Server is off.");
     }
-
-    // --- LOGGING ---
 
     public static void log(String msg) {
         String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
         String formatted = "[" + time + "] " + msg;
         System.out.println(formatted);
         serverLogs.add(formatted);
-
-        if (serverLogs.size() > 5000) {
-            serverLogs.remove(0);
-        }
+        if (serverLogs.size() > 5000) serverLogs.remove(0);
     }
 
     public static int getOnlineCount() {
@@ -205,27 +172,20 @@ public class Server {
         return result;
     }
 
-    // Zpětná kompatibilita (původní název metody)
-    public static String[] getUserList() {
-        return getUserListWithLevels();
-    }
-
-    // --- SENDING MESSAGES ---
+    public static String[] getUserList() { return getUserListWithLevels(); }
 
     public static void sendChatMessage(String senderNick, String message, String room) {
         String time = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
         int msgId = DatabaseManager.saveMessage(senderNick, message, time, room);
-
-        DatabaseManager.addXp(senderNick, 5); // 5 XP odměna
+        DatabaseManager.addXp(senderNick, 5);
         log("[" + room + "] " + senderNick + ": " + message);
         broadcastRaw("MSG:" + msgId + ":" + senderNick + ":" + message, room);
     }
 
     public static void sendBurnMessage(String senderNick, String message, String room, int seconds) {
         String time = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
-        int msgId = DatabaseManager.saveMessage(senderNick, message, time, room, true); // true = is_burnable
-
-        DatabaseManager.addXp(senderNick, 10); // Více XP za používání funkcí
+        int msgId = DatabaseManager.saveMessage(senderNick, message, time, room, true);
+        DatabaseManager.addXp(senderNick, 10);
         log("🔥 [" + room + "] " + senderNick + " poslala TAJNOU zprávu (" + seconds + "s).");
         broadcastRaw("BURN:" + msgId + ":" + senderNick + ":" + message + ":" + seconds, room);
     }
@@ -234,13 +194,11 @@ public class Server {
         String senderName = "SYSTEM";
         String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
         int id = DatabaseManager.saveMessage(senderName, message, time, room);
-
         log("📢 [" + room + "] SYSTEM: " + message);
         broadcastRaw("MSG:" + id + ":" + senderName + ":" + message, room);
     }
 
     public static void broadcastRaw(String packet, String room) {
-        // 1. Desktop clients
         synchronized (clients) {
             for (ServerThread client : clients.values()) {
                 if (room.equals("ALL") || client.getCurrentRoom().equals(room)) {
@@ -252,17 +210,29 @@ public class Server {
                 }
             }
         }
-
-        // 2. Web clients
         if (chatServerInstance != null) {
             String targetRoom = room.equals("ALL") ? null : room;
             chatServerInstance.broadcastToWeb(packet, targetRoom);
         }
     }
 
+    public static void broadcastGame(String pureGamePacket, String room) {
+        String desktopPacket = "MSG:0:SYSTEM:" + pureGamePacket;
+        synchronized (clients) {
+            for (ServerThread client : clients.values()) {
+                if (room.equals("ALL") || client.getCurrentRoom().equals(room)) {
+                    client.sendEncryptedMessage(desktopPacket);
+                }
+            }
+        }
+        if (chatServerInstance != null) {
+            String targetRoom = room.equals("ALL") ? null : room;
+            chatServerInstance.broadcastToWeb(pureGamePacket, targetRoom);
+        }
+    }
+
     public static void processWebMessage(String sender, String message, String currentRoom) {
         String time = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
-
         if (message.startsWith("IMG:") || message.startsWith("FILE:")) {
             String[] parts = message.split(":", 4);
             if (parts.length == 4) {
@@ -278,57 +248,55 @@ public class Server {
         log("[WEB] " + sender + " -> " + currentRoom);
     }
 
-    // --- ROOM MANAGEMENT ---
+    public static boolean createTempRoom(String roomName, String creator) {
+        if (activeRooms.contains(roomName)) return false;
+        activeRooms.add(roomName);
+        tempRooms.add(roomName);
+        broadcastRoomList();
+        sendSystemBroadcast("⏱️ Dočasná místnost '" + roomName + "' vytvořena. Smaže se, jakmile ji všichni opustí.", roomName);
+        return true;
+    }
 
-    public static void createTempRoom(String roomName, String creator) {
-        if (!activeRooms.contains(roomName)) {
-            activeRooms.add(roomName);
-            tempRooms.add(roomName);
-            broadcastRoomList();
-            sendSystemBroadcast("⏱️ Dočasná místnost '" + roomName + "' vytvořena. Smaže se, jakmile ji všichni opustí.", roomName);
+    public static boolean createPrivateRoom(String roomName, String creator) {
+        if (activeRooms.contains(roomName)) return false;
+        activeRooms.add(roomName);
+        privateRooms.put(roomName, new PrivateRoom(creator));
+        broadcastRoomList();
+        sendSystemBroadcast("🔒 Soukromá místnost '" + roomName + "' vytvořena. Jsi hostitel.", roomName);
+        return true;
+    }
+
+    public static boolean canJoinRoom(String nick, String roomName) {
+        if (!activeRooms.contains(roomName)) return false;
+        if (privateRooms.containsKey(roomName)) {
+            return privateRooms.get(roomName).allowedUsers.contains(nick) || DatabaseManager.isAdmin(nick);
         }
+        return true;
     }
 
     public static void checkTempRooms() {
         Set<String> toDelete = new HashSet<>();
-
         for (String room : tempRooms) {
             boolean hasUsers = false;
-
-            // Check Desktop clients
             synchronized (clients) {
                 for (ServerThread c : clients.values()) {
-                    if (c.getCurrentRoom().equals(room)) {
-                        hasUsers = true;
-                        break;
-                    }
+                    if (c.getCurrentRoom().equals(room)) { hasUsers = true; break; }
                 }
             }
-
-            // Check Web clients
             if (!hasUsers && chatServerInstance != null) {
                 for (String r : ChatSocketServer.clientRooms.values()) {
-                    if (r.equals(room)) {
-                        hasUsers = true;
-                        break;
-                    }
+                    if (r.equals(room)) { hasUsers = true; break; }
                 }
             }
-
-            if (!hasUsers) {
-                toDelete.add(room);
-            }
+            if (!hasUsers) toDelete.add(room);
         }
-
         for (String room : toDelete) {
             deleteRoom(room);
         }
     }
 
     public static void deleteMessage(int msgId) {
-        if (DatabaseManager.deleteMessage(msgId)) {
-            broadcastRaw("DELETE_MSG:" + msgId, "ALL");
-        }
+        if (DatabaseManager.deleteMessage(msgId)) broadcastRaw("DELETE_MSG:" + msgId, "ALL");
     }
 
     public static void deleteRoom(String roomName) {
@@ -339,103 +307,96 @@ public class Server {
             for (ServerThread client : clients.values()) {
                 if (client.getCurrentRoom().equals(roomName)) {
                     client.setCurrentRoom("Lobby");
-                    client.sendEncryptedMessage("ROOM_CHANGED:Lobby");
                     client.sendEncryptedMessage("MSG:0:SYSTEM:⚠️ Room has been deleted.");
                 }
             }
         }
-
         activeRooms.remove(roomName);
         tempRooms.remove(roomName);
+        privateRooms.remove(roomName);
         broadcastRoomList();
         broadcastRaw("MSG:0:SYSTEM:Room " + roomName + " deleted.", "ALL");
     }
 
-    public static void broadcastRoomList() {
-        if (activeRooms.isEmpty()) return;
+    public static String getCustomRoomList(String nick) {
+        if (activeRooms.isEmpty()) return "";
         List<String> list = new ArrayList<>();
+        boolean isAdmin = DatabaseManager.isAdmin(nick);
+
         for (String r : activeRooms) {
-            if (tempRooms.contains(r)) {
+            if (privateRooms.containsKey(r)) {
+                if (isAdmin || privateRooms.get(r).allowedUsers.contains(nick)) {
+                    list.add(r + "|2");
+                }
+            } else if (tempRooms.contains(r)) {
                 list.add(r + "|1");
             } else {
                 list.add(r + "|0");
             }
         }
-        broadcastRaw("ROOM_LIST:" + String.join(",", list), "ALL");
+        return String.join(",", list);
+    }
+
+    public static void broadcastRoomList() {
+        synchronized (clients) {
+            for (ServerThread client : clients.values()) {
+                client.sendEncryptedMessage("ROOM_LIST:" + getCustomRoomList(client.getClientName()));
+            }
+        }
+        if (chatServerInstance != null) {
+            for (Map.Entry<WebSocket, String> entry : ChatSocketServer.webClients.entrySet()) {
+                if (entry.getKey().isOpen()) {
+                    entry.getKey().send("ROOM_LIST:" + getCustomRoomList(entry.getValue()));
+                }
+            }
+        }
     }
 
     public static void broadcastUserList() {
         broadcastRaw("USERS:" + String.join(",", getUserListWithLevels()), "ALL");
     }
 
-    // --- MODERATION (Kick, Ban, Mute) ---
-
     public static void kickUser(String targetNick, String reason) {
         if (DatabaseManager.isAdmin(targetNick)) return;
-
         log("KICK: " + targetNick + " (" + reason + ")");
         broadcastRaw("MSG:0:SYSTEM:👢 User " + targetNick + " was kicked.", "ALL");
-
         ServerThread target = clients.get(targetNick);
         if (target != null) {
             target.sendEncryptedMessage("DISCONNECT:❌ BYL JSI ODPOJEN! Důvod: " + reason);
-            try {
-                Thread.sleep(200);
-            } catch (Exception ignored) {
-            }
+            try { Thread.sleep(200); } catch (Exception ignored) {}
             target.disconnect();
         }
-
         WebSocket wsToKick = null;
         for (Map.Entry<WebSocket, String> entry : ChatSocketServer.webClients.entrySet()) {
-            if (entry.getValue().equals(targetNick)) {
-                wsToKick = entry.getKey();
-                break;
-            }
+            if (entry.getValue().equals(targetNick)) { wsToKick = entry.getKey(); break; }
         }
-        if (wsToKick != null) {
-            wsToKick.close(1000, "KICKED: " + reason);
-        }
-
+        if (wsToKick != null) wsToKick.close(1000, "KICKED: " + reason);
         removeClient(targetNick);
     }
 
     public static boolean banUser(String targetNick, String adminName, String reason, long seconds) {
         if (DatabaseManager.isAdmin(targetNick)) return false;
-
         DatabaseManager.banUser(targetNick, adminName, reason, seconds);
         DatabaseManager.deleteMessagesByUser(targetNick);
         broadcastRaw("MSG:0:SYSTEM:🔨 User " + targetNick + " was banned.", "ALL");
-
         ServerThread target = clients.get(targetNick);
         if (target != null) {
             target.sendEncryptedMessage("DISCONNECT:⛔ BAN! Reason: " + reason);
             target.disconnect();
         }
-
         WebSocket wsToBan = null;
         for (Map.Entry<WebSocket, String> entry : ChatSocketServer.webClients.entrySet()) {
-            if (entry.getValue().equals(targetNick)) {
-                wsToBan = entry.getKey();
-                break;
-            }
+            if (entry.getValue().equals(targetNick)) { wsToBan = entry.getKey(); break; }
         }
-        if (wsToBan != null) {
-            wsToBan.close(1000, "BANNED: " + reason);
-        }
-
+        if (wsToBan != null) wsToBan.close(1000, "BANNED: " + reason);
         removeClient(targetNick);
         return true;
     }
 
     public static void muteUser(String targetNick, int seconds, String reason) {
         if (DatabaseManager.isAdmin(targetNick)) return;
-
         ServerThread target = clients.get(targetNick);
-        if (target != null) {
-            target.mute(seconds, reason);
-        }
-
+        if (target != null) target.mute(seconds, reason);
         log("MUTE: " + targetNick + " (" + seconds + "s)");
     }
 
@@ -460,40 +421,23 @@ public class Server {
     }
 
     public static void sendDirectMessage(String rawData, String room) {
-        if (rawData.startsWith("IMG:")) {
-            log("🖼️ Sending IMAGE to room: " + room);
-        } else if (rawData.startsWith("FILE:")) {
-            log("📁 Sending FILE to room: " + room);
-        }
         broadcastRaw(rawData, room);
     }
 
-    // --- GLOBAL MATH LOGIC ---
     public static synchronized void checkAndGenerateMath() {
         if (globalMathResult == null && (System.currentTimeMillis() - lastMathTime > MATH_INTERVAL)) {
             java.util.Random rand = new java.util.Random();
             int a = rand.nextInt(50) + 1;
             int b = rand.nextInt(50) + 1;
             int op = rand.nextInt(3);
-
             String operator = "+";
             switch (op) {
-                case 0:
-                    globalMathResult = a + b;
-                    operator = "+";
-                    break;
-                case 1:
-                    globalMathResult = a - b;
-                    operator = "-";
-                    break;
+                case 0: globalMathResult = a + b; operator = "+"; break;
+                case 1: globalMathResult = a - b; operator = "-"; break;
                 case 2:
-                    a = rand.nextInt(12) + 1;
-                    b = rand.nextInt(12) + 1;
-                    globalMathResult = a * b;
-                    operator = "*";
-                    break;
+                    a = rand.nextInt(12) + 1; b = rand.nextInt(12) + 1;
+                    globalMathResult = a * b; operator = "*"; break;
             }
-
             lastMathTime = System.currentTimeMillis();
             sendSystemBroadcast("🧮 SOUTĚŽ: Vypočítej " + a + " " + operator + " " + b + " (Kdo dřív přijde, ten dřív mele!)", "Lobby");
         }
@@ -511,14 +455,10 @@ public class Server {
                     broadcastUserList();
                     return true;
                 }
-            } catch (NumberFormatException e) {
-                // Not a number, ignore
-            }
+            } catch (NumberFormatException e) {}
         }
         return false;
     }
-
-    // --- UNIVERZÁLNÍ SPRÁVA UŽIVATELŮ (WEB I DESKTOP) ---
 
     public static boolean isUserOnline(String nick) {
         if (clients.containsKey(nick)) return true;
@@ -528,15 +468,11 @@ public class Server {
 
     public static boolean sendToUser(String targetNick, String rawPacket) {
         boolean delivered = false;
-
-        // 1. Pokus o doručení do Desktop aplikace (TCP)
         ServerThread targetDesktop = clients.get(targetNick);
         if (targetDesktop != null) {
             targetDesktop.sendEncryptedMessage(rawPacket);
             delivered = true;
         }
-
-        // 2. Pokus o doručení do Webové aplikace (WebSocket)
         if (chatServerInstance != null) {
             for (Map.Entry<WebSocket, String> entry : ChatSocketServer.webClients.entrySet()) {
                 if (entry.getValue().equals(targetNick)) {
@@ -546,12 +482,19 @@ public class Server {
                 }
             }
         }
-
         return delivered;
     }
 
     public static void whisper(ServerThread sender, String targetNick, String message) {
         String formattedMsgRx = "🕵️ (šeptá ti): " + message;
         String formattedMsgTx = "🕵️ (šeptáš pro " + targetNick + "): " + message;
+
+        boolean found = sendToUser(targetNick, "MSG:0:" + sender.getClientName() + ":" + formattedMsgRx);
+
+        if (found) {
+            sender.sendEncryptedMessage("MSG:0:" + sender.getClientName() + ":" + formattedMsgTx);
+        } else {
+            sender.sendEncryptedMessage("MSG:0:SYSTEM:Uživatel '" + targetNick + "' není online.");
+        }
     }
 }

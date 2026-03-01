@@ -4,7 +4,8 @@ import org.example.Server;
 import org.example.managers.CryptoRSA;
 import org.example.managers.DatabaseManager;
 import org.example.managers.GameManager;
-import org.example.threads.ServerThread;
+import org.example.managers.InviteManager;
+import org.example.managers.WhiteboardManager;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
@@ -74,7 +75,7 @@ public class ChatSocketServer extends WebSocketServer {
                     webClients.put(conn, u);
                     clientRooms.put(conn, "Lobby");
                     conn.send("LOGIN_OK:" + u + ":" + DatabaseManager.isAdmin(u));
-                    conn.send("ROOM_LIST:" + String.join(",", Server.activeRooms));
+                    conn.send("ROOM_LIST:" + Server.getCustomRoomList(u));
                     sendHistory(conn, "Lobby");
 
                     Server.sendSystemBroadcast(u + " (WEB) se připojil.", "Lobby");
@@ -100,6 +101,22 @@ public class ChatSocketServer extends WebSocketServer {
         if (nick == null) { conn.send("ERROR:Nepřihlášen"); return; }
         String currentRoom = clientRooms.getOrDefault(conn, "Lobby");
 
+        if (message.startsWith("GAME:WB:")) {
+            if (message.startsWith("GAME:WB:CLOSE:")) {
+                String id = message.substring(14);
+                WhiteboardManager.SharedBoard board = WhiteboardManager.activeBoards.get(id);
+                if (board != null && board.p1.equals(nick)) {
+                    WhiteboardManager.activeBoards.remove(id);
+                    Server.broadcastGame(message, currentRoom);
+                } else {
+                    conn.send("MSG:0:SYSTEM:❌ Pouze zakladatel (" + (board != null ? board.p1 : "?") + ") může zavřít plátno!");
+                }
+                return;
+            }
+            Server.broadcastGame(message, currentRoom);
+            return;
+        }
+
         if (message.equals("/users")) {
             Server.broadcastUserList();
             return;
@@ -108,15 +125,18 @@ public class ChatSocketServer extends WebSocketServer {
         if (message.startsWith("/join ")) {
             String newRoom = message.substring(6).trim();
             if(!newRoom.isEmpty()){
-                if(!Server.activeRooms.contains(newRoom)) {
-                    Server.activeRooms.add(newRoom);
-                    Server.broadcastRoomList();
+                if (Server.canJoinRoom(nick, newRoom)) {
+                    if(!Server.activeRooms.contains(newRoom)) {
+                        Server.activeRooms.add(newRoom);
+                        Server.broadcastRoomList();
+                    }
+                    clientRooms.put(conn, newRoom);
+                    conn.send("ROOM_CHANGED:" + newRoom);
+                    sendHistory(conn, newRoom);
+                    Server.checkTempRooms();
+                } else {
+                    conn.send("MSG:0:SYSTEM:❌ Nemáš přístup do této soukromé místnosti!");
                 }
-                clientRooms.put(conn, newRoom);
-                conn.send("ROOM_CHANGED:" + newRoom);
-                sendHistory(conn, newRoom);
-
-                Server.checkTempRooms();
             }
             return;
         }
@@ -124,10 +144,51 @@ public class ChatSocketServer extends WebSocketServer {
         if (message.startsWith("/temproom ")) {
             String newRoom = message.substring(10).trim();
             if(!newRoom.isEmpty()){
-                Server.createTempRoom(newRoom, nick);
-                clientRooms.put(conn, newRoom);
-                conn.send("ROOM_CHANGED:" + newRoom);
-                Server.checkTempRooms();
+                if (Server.createTempRoom(newRoom, nick)) {
+                    clientRooms.put(conn, newRoom);
+                    conn.send("ROOM_CHANGED:" + newRoom);
+                    sendHistory(conn, newRoom);
+                    Server.checkTempRooms();
+                } else {
+                    conn.send("MSG:0:SYSTEM:❌ Místnost '" + newRoom + "' už existuje! Zvol jiný název.");
+                }
+            }
+            return;
+        }
+
+        if (message.startsWith("/createprivate ")) {
+            String newRoom = message.substring(15).trim();
+            if(!newRoom.isEmpty()){
+                if (Server.createPrivateRoom(newRoom, nick)) {
+                    clientRooms.put(conn, newRoom);
+                    conn.send("ROOM_CHANGED:" + newRoom);
+                    sendHistory(conn, newRoom);
+                    Server.checkTempRooms();
+                } else {
+                    conn.send("MSG:0:SYSTEM:⚠️ Místnost s tímto názvem už existuje.");
+                }
+            }
+            return;
+        }
+
+        if (message.startsWith("/roominvite ")) {
+            String target = message.substring(12).trim();
+            if (Server.privateRooms.containsKey(currentRoom)) {
+                Server.PrivateRoom pr = Server.privateRooms.get(currentRoom);
+                if (pr.host.equalsIgnoreCase(nick) || DatabaseManager.isAdmin(nick)) {
+                    if (Server.isUserOnline(target)) {
+                        pr.allowedUsers.add(target);
+                        Server.broadcastRoomList();
+                        Server.sendToUser(target, "MSG:0:SYSTEM:📩 Byl jsi pozván do soukromé místnosti '" + currentRoom + "'! Nyní ji vidíš v seznamu.");
+                        conn.send("MSG:0:SYSTEM:✅ Uživatel " + target + " byl pozván do místnosti.");
+                    } else {
+                        conn.send("MSG:0:SYSTEM:❌ Uživatel " + target + " není online.");
+                    }
+                } else {
+                    conn.send("MSG:0:SYSTEM:⛔ Jen hostitel (" + pr.host + ") může zvát další lidi!");
+                }
+            } else {
+                conn.send("MSG:0:SYSTEM:⚠️ Tato místnost není soukromá!");
             }
             return;
         }
@@ -156,7 +217,31 @@ public class ChatSocketServer extends WebSocketServer {
         }
 
         if (message.startsWith("/ttt ")) {
-            GameManager.handleGameCommand(nick, message, currentRoom);
+            if (message.startsWith("/ttt start ")) {
+                String opponent = message.substring(11).trim();
+                InviteManager.handleInviteRequest(nick, opponent, "TTT", currentRoom);
+            } else if (message.startsWith("/ttt tah ")) {
+                GameManager.handleGameCommand(nick, message, currentRoom);
+            }
+            return;
+        }
+
+        if (message.startsWith("/wb ")) {
+            if (message.trim().equals("/wb room")) {
+                WhiteboardManager.startRoom(nick, currentRoom);
+            } else if (message.startsWith("/wb start ")) {
+                String opponent = message.substring(10).trim();
+                InviteManager.handleInviteRequest(nick, opponent, "WB", currentRoom);
+            }
+            return;
+        }
+
+        if (message.startsWith("/invite ")) {
+            String[] p = message.substring(8).trim().split(" ");
+            if (p.length == 2) {
+                if (p[0].equals("accept")) InviteManager.acceptInvite(nick, p[1]);
+                else if (p[0].equals("decline")) InviteManager.declineInvite(nick, p[1]);
+            }
             return;
         }
 
@@ -225,12 +310,16 @@ public class ChatSocketServer extends WebSocketServer {
             } return;
         }
 
-        if (message.startsWith("MSG:")) {
+        if (message.startsWith("MSG:") || message.startsWith("ZK:")) {
             if (DatabaseManager.isBanned(nick)) {
                 conn.send("MSG:0:SYSTEM:⛔ Jsi umlčen/zabanován.");
                 return;
             }
-            Server.processWebMessage(nick, message.substring(4), currentRoom);
+
+            // Pokud zpráva začíná na MSG:, odstraníme prefix
+            String contentToProcess = message.startsWith("MSG:") ? message.substring(4) : message;
+
+            Server.processWebMessage(nick, contentToProcess, currentRoom);
         }
         else if (message.startsWith("FILE:") || message.startsWith("IMG:")) {
             if (DatabaseManager.isBanned(nick)) {

@@ -6,12 +6,11 @@ import org.example.threads.ServerThread;
 public class CommandHandler {
 
     public static void handle(ServerThread client, String command) {
-        // Odstraníme lomítko na začátku
         if (command.startsWith("/")) {
             command = command.substring(1);
         }
 
-        String[] parts = command.split(" ", 2); // Rozdělíme na PŘÍKAZ a ARGUMENTY
+        String[] parts = command.split(" ", 2);
         String cmd = parts[0].toLowerCase();
         String args = parts.length > 1 ? parts[1] : "";
 
@@ -19,7 +18,11 @@ public class CommandHandler {
             case "join":
             case "room":
                 if (!args.isEmpty()) {
-                    client.joinRoom(args);
+                    if (Server.canJoinRoom(client.getClientName(), args)) {
+                        client.joinRoom(args);
+                    } else {
+                        client.sendEncryptedMessage("MSG:0:SYSTEM:❌ Nemáš přístup do této soukromé místnosti, nebo neexistuje!");
+                    }
                 } else {
                     client.sendEncryptedMessage("MSG:0:SYSTEM:Musíš zadat název místnosti! (např. /join Sport)");
                 }
@@ -28,17 +31,56 @@ public class CommandHandler {
             case "temproom":
                 if (!args.isEmpty()) {
                     String newRoom = args.trim();
-                    Server.createTempRoom(newRoom, client.getClientName());
-                    client.joinRoom(newRoom);
+                    if (Server.createTempRoom(newRoom, client.getClientName())) {
+                        client.joinRoom(newRoom);
+                    } else {
+                        client.sendEncryptedMessage("MSG:0:SYSTEM:❌ Místnost '" + newRoom + "' už existuje! Zvol jiný název.");
+                    }
                 } else {
                     client.sendEncryptedMessage("MSG:0:SYSTEM:Musíš zadat název! (/temproom Název)");
                 }
                 break;
 
+            case "createprivate":
+                if (!args.isEmpty()) {
+                    String newRoom = args.trim();
+                    if (Server.createPrivateRoom(newRoom, client.getClientName())) {
+                        client.joinRoom(newRoom);
+                    } else {
+                        client.sendEncryptedMessage("MSG:0:SYSTEM:⚠️ Místnost s tímto názvem už existuje.");
+                    }
+                } else {
+                    client.sendEncryptedMessage("MSG:0:SYSTEM:Musíš zadat název! (/createprivate Název)");
+                }
+                break;
+
+            case "roominvite":
+                if (!args.isEmpty()) {
+                    String target = args.trim();
+                    String current = client.getCurrentRoom();
+                    if (Server.privateRooms.containsKey(current)) {
+                        Server.PrivateRoom pr = Server.privateRooms.get(current);
+                        if (pr.host.equalsIgnoreCase(client.getClientName()) || client.isAdmin()) {
+                            if (Server.isUserOnline(target)) {
+                                pr.allowedUsers.add(target);
+                                Server.broadcastRoomList();
+                                Server.sendToUser(target, "MSG:0:SYSTEM:📩 Byl jsi pozván do soukromé místnosti '" + current + "'! Nyní ji vidíš v seznamu.");
+                                client.sendEncryptedMessage("MSG:0:SYSTEM:✅ Uživatel " + target + " byl pozván do místnosti.");
+                            } else {
+                                client.sendEncryptedMessage("MSG:0:SYSTEM:❌ Uživatel " + target + " není online.");
+                            }
+                        } else {
+                            client.sendEncryptedMessage("MSG:0:SYSTEM:⛔ Jen hostitel (" + pr.host + ") může zvát další lidi!");
+                        }
+                    } else {
+                        client.sendEncryptedMessage("MSG:0:SYSTEM:⚠️ Tato místnost není soukromá!");
+                    }
+                }
+                break;
+
             case "rooms":
             case "getrooms":
-                String roomList = String.join(",", Server.activeRooms);
-                client.sendEncryptedMessage("ROOM_LIST:" + roomList);
+                client.sendEncryptedMessage("ROOM_LIST:" + Server.getCustomRoomList(client.getClientName()));
                 break;
 
             case "create":
@@ -60,7 +102,6 @@ public class CommandHandler {
             case "users":
             case "online":
             case "list":
-                // Změněno na metodu s levely z naší aktualizace
                 String[] users = Server.getUserListWithLevels();
                 int count = Server.getOnlineCount();
                 client.sendEncryptedMessage("MSG:0:SYSTEM:Online (" + count + "): " + String.join(", ", users));
@@ -94,30 +135,48 @@ public class CommandHandler {
                 break;
 
             case "ttt":
-                if (!args.isEmpty()) {
+                if (args.startsWith("start ")) {
+                    String opponent = args.substring(6).trim();
+                    InviteManager.handleInviteRequest(client.getClientName(), opponent, "TTT", client.getCurrentRoom());
+                } else if (args.startsWith("tah ")) {
                     GameManager.handleGameCommand(client.getClientName(), "/ttt " + args, client.getCurrentRoom());
                 } else {
                     client.sendEncryptedMessage("MSG:0:SYSTEM:Použití: /ttt start [soupeř] nebo /ttt tah [řádek] [sloupec]");
                 }
                 break;
 
-            // 🔥 MANUÁLNÍ SPUŠTĚNÍ MATEMATIKY (jen pro Admina)
+            case "wb":
+                if (args.trim().equalsIgnoreCase("room")) {
+                    WhiteboardManager.startRoom(client.getClientName(), client.getCurrentRoom());
+                } else if (args.startsWith("start ")) {
+                    String opponent = args.substring(6).trim();
+                    InviteManager.handleInviteRequest(client.getClientName(), opponent, "WB", client.getCurrentRoom());
+                } else {
+                    client.sendEncryptedMessage("MSG:0:SYSTEM:Použití: /wb start [soupeř] nebo /wb room");
+                }
+                break;
+
+            case "invite":
+                String[] invArgs = args.split(" ");
+                if (invArgs.length == 2) {
+                    if (invArgs[0].equals("accept")) {
+                        InviteManager.acceptInvite(client.getClientName(), invArgs[1]);
+                    } else if (invArgs[0].equals("decline")) {
+                        InviteManager.declineInvite(client.getClientName(), invArgs[1]);
+                    }
+                }
+                break;
+
             case "math":
                 if (client.isAdmin()) {
-                    // Resetujeme časovač a smažeme aktuální výsledek, aby se příklad vygeneroval hned
                     Server.lastMathTime = 0;
                     Server.globalMathResult = null;
-
-                    // Zavoláme generování
                     Server.checkAndGenerateMath();
-                    // Log pro admina
                     client.sendEncryptedMessage("MSG:0:SYSTEM:🧮 Matematický příklad byl ručně spuštěn.");
                 } else {
                     client.sendEncryptedMessage("MSG:0:SYSTEM:⛔ Tento příkaz může použít pouze Admin.");
                 }
                 break;
-
-            // --- ADMIN PŘÍKAZY ---
 
             case "kick":
                 if (client.isAdmin()) {
@@ -237,10 +296,13 @@ public class CommandHandler {
         client.sendEncryptedMessage("MSG:0:SYSTEM:/join [místnost] - Změní místnost");
         client.sendEncryptedMessage("MSG:0:SYSTEM:/create [název] - Vytvoří místnost");
         client.sendEncryptedMessage("MSG:0:SYSTEM:/temproom [název] - Dočasná místnost");
+        client.sendEncryptedMessage("MSG:0:SYSTEM:/createprivate [název] - Soukromá místnost");
+        client.sendEncryptedMessage("MSG:0:SYSTEM:/roominvite [jméno] - Pozve hráče do soukromé");
         client.sendEncryptedMessage("MSG:0:SYSTEM:/users - Seznam online lidí");
         client.sendEncryptedMessage("MSG:0:SYSTEM:/w [nick] [zpráva] - Soukromá zpráva");
         client.sendEncryptedMessage("MSG:0:SYSTEM:/burn [s] [text] - Zpráva, která se po přečtení smaže");
         client.sendEncryptedMessage("MSG:0:SYSTEM:/ttt start [nick] - Začne hru Piškvorky");
+        client.sendEncryptedMessage("MSG:0:SYSTEM:/wb start [nick] - Založí společné kreslení (nebo /wb room pro celou místnost)");
 
         if (client.isAdmin()) {
             client.sendEncryptedMessage("MSG:0:SYSTEM: ");

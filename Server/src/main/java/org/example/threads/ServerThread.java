@@ -4,7 +4,7 @@ import org.example.Server;
 import org.example.managers.CommandHandler;
 import org.example.managers.CryptoUtils;
 import org.example.managers.DatabaseManager;
-import org.example.managers.GameManager;
+import org.example.managers.WhiteboardManager;
 
 import java.io.*;
 import java.net.Socket;
@@ -43,6 +43,16 @@ public class ServerThread implements Runnable {
     public void setCurrentRoom(String roomName) {
         this.currentRoom = roomName;
         sendEncryptedMessage("ROOM_CHANGED:" + roomName);
+
+        List<String> history = DatabaseManager.getHistory(roomName);
+        for (String h : history) {
+            if (h.startsWith("MSG:") || h.startsWith("BURN:")) {
+                sendEncryptedMessage(h);
+            } else {
+                sendRawMessage(h);
+            }
+        }
+
         Server.checkTempRooms();
     }
 
@@ -117,17 +127,8 @@ public class ServerThread implements Runnable {
 
                 sendEncryptedMessage("LOGIN_OK:" + (isAdmin ? "ADMIN" : "USER"));
 
-                joinRoom("Lobby");
                 Server.registerClient(nick, this);
-
-                List<String> history = DatabaseManager.getHistory("Lobby");
-                for (String h : history) {
-                    if (h.startsWith("MSG:") || h.startsWith("BURN:")) {
-                        sendEncryptedMessage(h);
-                    } else {
-                        sendRawMessage(h);
-                    }
-                }
+                joinRoom("Lobby");
 
             } else {
                 sendEncryptedMessage("AUTH_FAIL:❌ Špatné jméno nebo heslo.");
@@ -137,14 +138,8 @@ public class ServerThread implements Runnable {
                 this.nick = parts[1];
                 sendEncryptedMessage("LOGIN_OK:" + (isAdmin ? "ADMIN" : "USER"));
 
-                joinRoom("Lobby");
                 Server.registerClient(nick, this);
-
-                List<String> history = DatabaseManager.getHistory("Lobby");
-                for (String h : history) {
-                    if (h.startsWith("MSG:") || h.startsWith("BURN:")) sendEncryptedMessage(h);
-                    else sendRawMessage(h);
-                }
+                joinRoom("Lobby");
             } else {
                 sendEncryptedMessage("AUTH_FAIL:❌ Uživatel již existuje.");
             }
@@ -160,6 +155,27 @@ public class ServerThread implements Runnable {
                 return;
             }
             handleFileTransfer(rawInput);
+            return;
+        }
+
+        if (rawInput.startsWith("GAME:WB:")) {
+            if (rawInput.startsWith("GAME:WB:CLOSE:")) {
+                String id = rawInput.substring(14);
+                WhiteboardManager.SharedBoard board = WhiteboardManager.activeBoards.get(id);
+                if (board != null && board.p1.equals(this.nick)) {
+                    WhiteboardManager.activeBoards.remove(id);
+                    Server.broadcastGame(rawInput, currentRoom);
+                } else {
+                    sendEncryptedMessage("MSG:0:SYSTEM:❌ Pouze zakladatel (" + (board != null ? board.p1 : "?") + ") může zavřít plátno!");
+                }
+                return;
+            }
+            Server.broadcastGame(rawInput, currentRoom);
+            return;
+        }
+
+        if (rawInput.startsWith("ZK:")) {
+            Server.sendChatMessage(this.nick, rawInput, this.currentRoom);
             return;
         }
 
@@ -206,27 +222,6 @@ public class ServerThread implements Runnable {
                 disconnect();
                 return;
             }
-            if (decryptedLine.startsWith("/temproom ")) {
-                String r = decryptedLine.substring(10).trim();
-                Server.createTempRoom(r, nick);
-                setCurrentRoom(r);
-                return;
-            }
-            if (decryptedLine.startsWith("/burn ")) {
-                String[] p = decryptedLine.substring(6).split(" ", 2);
-                if(p.length == 2) {
-                    try {
-                        int sec = Integer.parseInt(p[0].replace("s",""));
-                        Server.sendBurnMessage(nick, p[1], currentRoom, sec);
-                    } catch(Exception e){}
-                }
-                return;
-            }
-            if (decryptedLine.startsWith("/ttt ")) {
-                GameManager.handleGameCommand(nick, decryptedLine, currentRoom);
-                return;
-            }
-
             CommandHandler.handle(this, decryptedLine);
             return;
         }
