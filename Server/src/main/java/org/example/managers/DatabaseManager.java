@@ -166,26 +166,63 @@ public class DatabaseManager {
         return checkCredentials(username, password);
     }
 
-    public static boolean resetPassword(String username, String newPassword, String recoveryCode) {
+    public static boolean resetPassword(String username, String recoveryCode, String newPassword) {
+        System.out.println("\n--- START RECOVER DEBUG ---");
+        System.out.println("1. Hledám uživatele: [" + username + "]");
+        System.out.println("2. Zadaný kód z webu: [" + recoveryCode + "]");
+        System.out.println("3. Zadané NOVÉ HESLO z webu: [" + newPassword + "]"); // TADY JE TA PAST!
+
         String sqlCheck = "SELECT recovery_hash FROM users WHERE username = ?";
         try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sqlCheck)) {
             pstmt.setString(1, username);
             ResultSet rs = pstmt.executeQuery();
+
             if (rs.next()) {
                 String storedRecHash = rs.getString("recovery_hash");
-                if (storedRecHash != null && PasswordUtils.verifyPassword(recoveryCode, storedRecHash)) {
-                    String newPassHash = PasswordUtils.hashPassword(newPassword);
-                    try (PreparedStatement update = conn.prepareStatement("UPDATE users SET password = ? WHERE username = ?")) {
-                        update.setString(1, newPassHash);
-                        update.setString(2, username);
-                        update.executeUpdate();
-                        return true;
+                System.out.println("4. Uživatel NALEZEN! Uložený kód v DB: [" + storedRecHash + "]");
+
+                if (storedRecHash != null) {
+                    boolean isValid = false;
+
+                    // Pokus 1: Správné ověření přes tvoji utilitu (řeší hashe i se solí)
+                    try {
+                        isValid = PasswordUtils.verifyPassword(recoveryCode, storedRecHash);
+                        System.out.println("5. Výsledek PasswordUtils.verifyPassword: " + isValid);
+                    } catch (Exception e) {
+                        System.out.println("5. verifyPassword hodilo chybu: " + e.getMessage());
                     }
+
+                    // Pokus 2: Zpětná kompatibilita (kdyby náhodou kód v DB nebyl hash, ale prostý text)
+                    if (!isValid) {
+                        isValid = storedRecHash.equals(recoveryCode);
+                        if (isValid) System.out.println("5. Výsledek equals (byl to čistý text): " + isValid);
+                    }
+
+                    if (isValid) {
+                        System.out.println("6. KÓD SEDÍ! Zahashuji nové heslo a ukládám...");
+                        String newPassHash = PasswordUtils.hashPassword(newPassword);
+
+                        try (PreparedStatement update = conn.prepareStatement("UPDATE users SET password = ? WHERE username = ?")) {
+                            update.setString(1, newPassHash);
+                            update.setString(2, username);
+                            update.executeUpdate();
+                            System.out.println("7. HESLO ÚSPĚŠNĚ ZMĚNĚNO V DB!");
+                            System.out.println("--- KONEC RECOVER DEBUG (Úspěch) ---\n");
+                            return true;
+                        }
+                    } else {
+                        System.out.println("6. CHYBA: Zadaný kód se neshoduje s databází!");
+                    }
+                } else {
+                    System.out.println("4. CHYBA: Uživatel nemá v DB žádný záchranný kód.");
                 }
+            } else {
+                System.out.println("4. CHYBA: Uživatel [" + username + "] neexistuje.");
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            System.out.println("CHYBA SQL: " + e.getMessage());
         }
+        System.out.println("--- KONEC RECOVER DEBUG (Selhalo) ---\n");
         return false;
     }
 

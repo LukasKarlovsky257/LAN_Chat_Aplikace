@@ -144,6 +144,19 @@ public class ServerThread implements Runnable {
                 sendEncryptedMessage("AUTH_FAIL:❌ Uživatel již existuje.");
             }
         }
+        // 👇 PŘIDÁNO: Zpracování obnovy hesla 👇
+        else if (cmd.equals("RECOVER") && parts.length >= 4) {
+            String user = parts[1];
+            String code = parts[2];
+            String newPass = parts[3];
+
+            // Tato metoda musí existovat v DatabaseManager
+            if (DatabaseManager.resetPassword(user, newPass, code)) {
+                sendEncryptedMessage("RECOVER_OK");
+            } else {
+                sendEncryptedMessage("AUTH_FAIL:❌ Špatné jméno nebo Recovery Kód!");
+            }
+        }
     }
 
     private void processMessage(String rawInput, String decryptedLine, boolean wasEncrypted) {

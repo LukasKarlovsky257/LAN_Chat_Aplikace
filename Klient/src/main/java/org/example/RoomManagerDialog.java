@@ -1,6 +1,8 @@
 package org.example;
 
+import org.example.Klient;
 import org.example.helpers.ModernDialog;
+import org.example.helpers.ModernTheme;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -13,8 +15,6 @@ import java.awt.GridLayout;
 import java.awt.Point;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.PrintWriter;
-import java.security.PublicKey;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -26,53 +26,45 @@ import javax.swing.JScrollPane;
 import javax.swing.ListCellRenderer;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
-import javax.swing.plaf.basic.BasicButtonUI;
 
 public class RoomManagerDialog extends JDialog {
     private DefaultListModel<String> listModel;
     private JList<String> roomList;
-    private PrintWriter out;
-    private PublicKey serverKey;
-    private boolean iAmAdmin;
+    private final Klient app;
     private Point initialClick;
 
-    public RoomManagerDialog(Frame parent, PrintWriter out, PublicKey serverKey, boolean iAmAdmin) {
+    public RoomManagerDialog(Frame parent, Klient app) {
         super(parent, "Správa Místností", false);
-        this.out = out;
-        this.serverKey = serverKey;
-        this.iAmAdmin = iAmAdmin;
+        this.app = app;
 
         setUndecorated(true);
-        getRootPane().setBorder(BorderFactory.createLineBorder(new Color(180, 180, 180), 1));
-        getContentPane().setBackground(new Color(250, 250, 250));
+        getRootPane().setBorder(BorderFactory.createLineBorder(ModernTheme.GLASS_BORDER, 1));
+        getContentPane().setBackground(ModernTheme.BG_BASE);
         setSize(400, 550);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout());
 
+        // Custom Title Bar
         JPanel titleBar = new JPanel(new BorderLayout());
-        titleBar.setBackground(new Color(240, 242, 245));
-        titleBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(220, 220, 220)));
-        JLabel titleLabel = new JLabel("  Správa Místností");
+        titleBar.setBackground(new Color(15, 18, 25));
+        titleBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ModernTheme.GLASS_BORDER));
+        JLabel titleLabel = new JLabel("  Sítě & Komunikace");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        titleLabel.setForeground(Color.BLACK);
+        titleLabel.setForeground(ModernTheme.NEON_CYAN);
         titleLabel.setPreferredSize(new Dimension(200, 35));
 
         JButton closeBarBtn = new JButton("X");
-        closeBarBtn.setUI(new BasicButtonUI()); // Vynutí čistý vzhled i u křížku
         closeBarBtn.setFocusPainted(false);
         closeBarBtn.setBorderPainted(false);
         closeBarBtn.setContentAreaFilled(false);
-        closeBarBtn.setOpaque(false);
-        closeBarBtn.setForeground(Color.BLACK);
-        closeBarBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        closeBarBtn.setForeground(ModernTheme.TEXT_MUTED);
         closeBarBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         closeBarBtn.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) { closeBarBtn.setForeground(Color.RED); }
-            @Override
-            public void mouseExited(MouseEvent e) { closeBarBtn.setForeground(Color.BLACK); }
+            public void mouseEntered(MouseEvent e) { closeBarBtn.setForeground(ModernTheme.DANGER); }
+            public void mouseExited(MouseEvent e) { closeBarBtn.setForeground(ModernTheme.TEXT_MUTED); }
         });
+
         closeBarBtn.addActionListener(e -> dispose());
 
         titleBar.add(titleLabel, BorderLayout.CENTER);
@@ -94,26 +86,40 @@ public class RoomManagerDialog extends JDialog {
 
         this.listModel = new DefaultListModel<>();
         this.roomList = new JList<>(this.listModel);
+
         this.roomList.setCellRenderer(new RoomListRenderer());
-        this.roomList.setBackground(Color.WHITE);
+        this.roomList.setBackground(ModernTheme.INPUT_BG);
+        this.roomList.setForeground(ModernTheme.TEXT_MAIN);
+        this.roomList.setSelectionBackground(ModernTheme.NEON_CYAN);
+        this.roomList.setSelectionForeground(Color.BLACK);
         this.roomList.setSelectionMode(0);
-        this.sendEncryptedCommand("/getrooms");
+
+        app.getNetwork().sendEncryptedMessage("/getrooms");
 
         JScrollPane scroll = new JScrollPane(this.roomList);
-        scroll.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        scroll.setBorder(BorderFactory.createCompoundBorder(
+                new EmptyBorder(15, 15, 5, 15),
+                new ModernTheme.RoundedBorder(10, ModernTheme.GLASS_BORDER)
+        ));
+        scroll.getViewport().setOpaque(false);
+        scroll.setOpaque(false);
         this.add(scroll, BorderLayout.CENTER);
 
         JPanel btnPanel = new JPanel(new GridLayout(4, 1, 5, 8));
         btnPanel.setOpaque(false);
-        btnPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 20, 20));
+        btnPanel.setBorder(BorderFactory.createEmptyBorder(15, 20, 20, 20));
 
-        // Tlačítka pro UI (bez barevných emotikonů kvůli prázdným čtvercům na Windows)
-        JButton btnJoin = createStyledButton("Vstoupit do vybrané", new Color(0, 132, 255), Color.WHITE);
-        JButton btnCreate = createStyledButton("Vytvořit nový kanál", new Color(46, 204, 113), Color.WHITE);
-        JButton btnCreatePrivate = createStyledButton("Založit soukromou místnost", new Color(237, 66, 69), Color.WHITE);
-        JButton btnDelete = createStyledButton("Smazat místnost (Admin)", new Color(200, 200, 200), Color.BLACK);
+        JButton btnJoin = ModernTheme.createButton("Vstoupit do vybrané", true);
+        JButton btnCreate = ModernTheme.createButton("➕ Vytvořit nový kanál", true);
+        btnCreate.setBackground(ModernTheme.SUCCESS);
 
-        btnDelete.setEnabled(this.iAmAdmin);
+        JButton btnCreatePrivate = ModernTheme.createButton("🔒 Založit soukromou místnost", true);
+        btnCreatePrivate.setBackground(ModernTheme.NEON_PURPLE);
+
+        JButton btnDelete = ModernTheme.createButton("🗑️ Smazat místnost (Admin)", false);
+        btnDelete.setForeground(ModernTheme.DANGER);
+
+        btnDelete.setEnabled(app.isAdmin());
 
         btnJoin.addActionListener((e) -> {
             String selected = getCleanRoomName(this.roomList.getSelectedValue());
@@ -128,7 +134,7 @@ public class RoomManagerDialog extends JDialog {
         btnCreatePrivate.addActionListener((e) -> {
             String newName = ModernDialog.showInput(this, "Soukromá místnost", "Zadejte název soukromé místnosti:");
             if (newName != null && !newName.trim().isEmpty()) {
-                this.sendEncryptedCommand("/createprivate " + newName.trim());
+                app.getNetwork().sendEncryptedMessage("/createprivate " + newName.trim());
                 this.dispose();
             }
         });
@@ -141,8 +147,11 @@ public class RoomManagerDialog extends JDialog {
                     return;
                 }
                 if (ModernDialog.showConfirm(this, "Varování", "Opravdu chcete smazat místnost <b>" + selected + "</b>?")) {
-                    this.sendEncryptedCommand("/deleteroom " + selected);
-                    try { Thread.sleep(200L); this.sendEncryptedCommand("/getrooms"); } catch (Exception ignored) {}
+                    app.getNetwork().sendEncryptedMessage("/deleteroom " + selected);
+                    try {
+                        Thread.sleep(200L);
+                        app.getNetwork().sendEncryptedMessage("/getrooms");
+                    } catch (Exception ignored) {}
                 }
             }
         });
@@ -159,55 +168,9 @@ public class RoomManagerDialog extends JDialog {
         return rawItem.split("\\|")[0];
     }
 
-    private JButton createStyledButton(String text, Color bg, Color fg) {
-        JButton btn = new JButton(text);
-
-        // 🔥 MAGICKÝ ŘÁDEK PROTI BÍLÝM TLAČÍTKŮM NA WINDOWS 🔥
-        btn.setUI(new BasicButtonUI());
-
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        btn.setBackground(bg);
-        btn.setForeground(fg);
-        btn.setFocusPainted(false);
-        // 🔥 TOHLE OPRAVÍ TY BÍLÉ TLAČÍTKA NA WINDOWS:
-        btn.setContentAreaFilled(false);
-        btn.setOpaque(true);
-
-        btn.setBorder(new EmptyBorder(10, 15, 10, 15));
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        btn.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                if (btn.isEnabled()) {
-                    btn.setBackground(Color.BLACK);
-                    btn.setForeground(Color.WHITE);
-                }
-            }
-            @Override
-            public void mouseExited(MouseEvent e) {
-                if (btn.isEnabled()) {
-                    btn.setBackground(bg);
-                    btn.setForeground(fg);
-                }
-            }
-        });
-        return btn;
-    }
-
     private void switchRoom(String roomName) {
-        this.sendEncryptedCommand("/join " + roomName);
+        app.getNetwork().sendEncryptedMessage("/join " + roomName);
         this.dispose();
-    }
-
-    private void sendEncryptedCommand(String cmd) {
-        try {
-            if (this.serverKey != null && this.out != null) {
-                this.out.println(CryptoUtils.encrypt(cmd, this.serverKey));
-            }
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
     }
 
     public void updateList(String[] rooms) {
@@ -227,7 +190,7 @@ public class RoomManagerDialog extends JDialog {
             setOpaque(true);
 
             iconLabel = new JLabel();
-            iconLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+            iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 16));
 
             nameLabel = new JLabel();
             nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -244,23 +207,22 @@ public class RoomManagerDialog extends JDialog {
 
             nameLabel.setText(name);
 
-            // Místo emoji používáme bezpečné znaky pro Windows
             if (type.equals("2")) {
-                iconLabel.setText("*"); // Soukromá
-                iconLabel.setForeground(new Color(237, 66, 69));
-                nameLabel.setForeground(new Color(237, 66, 69));
+                iconLabel.setText("🔒");
+                nameLabel.setForeground(ModernTheme.DANGER);
             } else if (type.equals("1")) {
-                iconLabel.setText("~"); // Dočasná
-                iconLabel.setForeground(new Color(250, 166, 26));
-                nameLabel.setForeground(new Color(250, 166, 26));
+                iconLabel.setText("⏱️");
+                nameLabel.setForeground(new Color(250, 166, 26)); // Oranžová
             } else {
-                iconLabel.setText("#"); // Klasická
-                iconLabel.setForeground(Color.GRAY);
-                nameLabel.setForeground(Color.BLACK);
+                iconLabel.setText("💬");
+                nameLabel.setForeground(ModernTheme.TEXT_MAIN);
             }
 
-            if (isSelected) setBackground(new Color(230, 240, 255));
-            else setBackground(Color.WHITE);
+            if (isSelected) {
+                setBackground(new Color(255, 255, 255, 20)); // Skleněný výběr
+            } else {
+                setBackground(new Color(0, 0, 0, 0)); // Průhledná pro ostatní
+            }
 
             return this;
         }

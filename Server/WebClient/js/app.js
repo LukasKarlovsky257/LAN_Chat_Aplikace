@@ -1,25 +1,35 @@
-/* =========================================
-4. APP - Odesílání zpráv a Event Listenery
-========================================= */
-
 const chat = {
     join: (r) => net.sendText("/join " + r),
-    createRoom: () => { const r = prompt("Název místnosti:"); if(r) net.sendText("/create " + r); },
-    createTempRoom: () => { const r = prompt("Název dočasné místnosti:"); if(r) net.sendText("/temproom " + r); },
-    createPrivateRoom: () => { const r = prompt("Název SOUKROMÉ místnosti:"); if(r) net.sendText("/createprivate " + r); },
+    createRoom: () => {
+        ModernDialog.showInput("Nová Místnost", "Název místnosti:").then(r => {
+            if(r) net.sendText("/create " + r);
+        });
+    },
+    createTempRoom: () => {
+        ModernDialog.showInput("Dočasná Místnost", "Název dočasné místnosti:").then(r => {
+            if(r) net.sendText("/temproom " + r);
+        });
+    },
+    createPrivateRoom: () => {
+        ModernDialog.showInput("Soukromá Místnost", "Název SOUKROMÉ místnosti:").then(r => {
+            if(r) net.sendText("/createprivate " + r);
+        });
+    },
+
     send: () => {
         const input = document.getElementById('msg-input');
         let txt = input.value.trim();
+
         if(!txt) return;
 
-        // 👇 PŘIDÁNO: Zabalení do citace 👇
         if (state.replySender && state.replyText) {
-            txt = `REPLY|${state.replySender}|${state.replyText}|${txt}`;
-            ui.cancelReply(); // Skryje náhledový panel po odeslání
+            const replyId = state.replyId ? state.replyId : "0";
+            txt = `REPLY|${replyId}|${state.replySender}|${state.replyText}|${txt}`;
+            ui.cancelReply();
         }
 
         if (txt.length > 1000) {
-            ui.showAlert("Zpráva je příliš dlouhá! (Maximum je 1000 znaků).", true);
+            ModernDialog.showMessage("Chyba", "Zpráva je příliš dlouhá! (Maximum je 1000 znaků).", true);
             return;
         }
 
@@ -41,10 +51,11 @@ const chat = {
             if (encryptedMsg) net.sendText("ZK:" + encryptedMsg);
         }
     },
+
     startTicTacToe: () => {
         const name = document.getElementById('game-opponent-name').value.trim();
-        if (!name) { ui.showAlert("Musíš zadat jméno soupeře!"); return; }
-        if (name.toLowerCase() === state.nick.toLowerCase()) { ui.showAlert("Nemůžeš vyzvat sám sebe!"); return; }
+        if (!name) { ModernDialog.showMessage("Chyba", "Musíš zadat jméno soupeře!", true); return; }
+        if (name.toLowerCase() === state.nick.toLowerCase()) { ModernDialog.showMessage("Chyba", "Nemůžeš vyzvat sám sebe!", true); return; }
         net.sendText(`/ttt start ${name}`);
         document.getElementById('game-opponent-name').value = "";
         ui.closeModals();
@@ -53,7 +64,7 @@ const chat = {
         const name = document.getElementById('game-opponent-name').value.trim();
         if (!name) net.sendText(`/wb room`);
         else {
-            if (name.toLowerCase() === state.nick.toLowerCase()) { ui.showAlert("Nech pole prázdné pro volné plátno!"); return; }
+            if (name.toLowerCase() === state.nick.toLowerCase()) { ModernDialog.showMessage("Chyba", "Nech pole prázdné pro volné plátno!", true); return; }
             net.sendText(`/wb start ${name}`);
         }
         document.getElementById('game-opponent-name').value = "";
@@ -61,7 +72,7 @@ const chat = {
     },
     uploadFile: () => { const f = document.getElementById('file-input').files[0]; if(f) chat.uploadFileObj(f); },
     uploadFileObj: (f) => {
-        if(f.size > 5 * 1024 * 1024) { ui.showAlert("Soubor je příliš velký (Max 5MB)"); return; }
+        if(f.size > 5 * 1024 * 1024) { ModernDialog.showMessage("Chyba", "Soubor je příliš velký (Max 5MB)", true); return; }
         const r = new FileReader();
         r.onload = (e) => {
             const prefix = f.type.startsWith('image/') ? 'IMG' : 'FILE';

@@ -1,29 +1,16 @@
 package org.example.helpers.gif;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Cursor;
-import java.awt.Dimension;
-import java.awt.Frame;
-import java.awt.GridLayout;
-import java.awt.Image;
+import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.net.URL;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import javax.swing.BorderFactory;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextField;
-import javax.swing.SwingUtilities;
+import javax.swing.*;
 import org.example.helpers.ChatPanel;
 import org.example.helpers.GiphyAPI;
+import org.example.helpers.ModernTheme; // DŮLEŽITÉ
 
 public class GifPicker extends JDialog {
     private final JTextField searchField;
@@ -32,47 +19,69 @@ public class GifPicker extends JDialog {
     private final ExecutorService executor;
 
     public GifPicker(ChatPanel parent) {
-        super((Frame)SwingUtilities.getWindowAncestor(parent), "Vybrat GIF", true);
+        super((Frame)SwingUtilities.getWindowAncestor(parent), "Databáze GIFů", true);
         this.chatPanel = parent;
         this.executor = Executors.newFixedThreadPool(4);
         this.setSize(600, 500);
         this.setLocationRelativeTo(parent);
         this.setLayout(new BorderLayout());
-        JPanel topPanel = new JPanel(new BorderLayout());
+        this.getContentPane().setBackground(ModernTheme.BG_BASE); // Tmavé pozadí
+
+        JPanel topPanel = new JPanel(new BorderLayout(10,0));
+        topPanel.setOpaque(false);
+        topPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
         this.searchField = new JTextField();
+        ModernTheme.styleTextField(this.searchField); // Aplikujeme tvůj styl
+        this.searchField.setBorder(BorderFactory.createCompoundBorder(
+                new ModernTheme.RoundedBorder(10, ModernTheme.GLASS_BORDER),
+                BorderFactory.createEmptyBorder(8,10,8,10)
+        ));
         this.searchField.addActionListener((e) -> this.loadGifs(this.searchField.getText()));
-        JButton searchBtn = new JButton("\ud83d\udd0d Hledat");
+
+        JButton searchBtn = ModernTheme.createButton("Hledat", true);
+        searchBtn.setBackground(ModernTheme.NEON_PURPLE); // Aby to hezky ladilo k GIFu
         searchBtn.addActionListener((e) -> this.loadGifs(this.searchField.getText()));
-        topPanel.add(this.searchField, "Center");
-        topPanel.add(searchBtn, "East");
-        topPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        this.add(topPanel, "North");
-        this.resultsPanel = new JPanel(new GridLayout(0, 3, 5, 5));
-        this.resultsPanel.setBackground(Color.WHITE);
+
+        topPanel.add(this.searchField, BorderLayout.CENTER);
+        topPanel.add(searchBtn, BorderLayout.EAST);
+        this.add(topPanel, BorderLayout.NORTH);
+
+        this.resultsPanel = new JPanel(new GridLayout(0, 3, 10, 10)); // Větší mezery mezi GIFy
+        this.resultsPanel.setBackground(ModernTheme.BG_BASE);
+        this.resultsPanel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+
         JScrollPane scroll = new JScrollPane(this.resultsPanel);
-        scroll.getVerticalScrollBar().setUnitIncrement(16);
-        this.add(scroll, "Center");
-        this.loadGifs("cat");
+        scroll.getVerticalScrollBar().setUnitIncrement(20);
+        scroll.setBorder(null);
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        this.add(scroll, BorderLayout.CENTER);
+
+        this.loadGifs("cyberpunk"); // Výchozí vyhledávání pro lepší vibe
     }
 
     private void loadGifs(String query) {
         this.resultsPanel.removeAll();
         this.resultsPanel.repaint();
-        JLabel loading = new JLabel("Načítám...", 0);
+        JLabel loading = new JLabel("Navazuji spojení s databází...", SwingConstants.CENTER);
+        loading.setForeground(ModernTheme.TEXT_MUTED);
         this.resultsPanel.add(loading);
         this.resultsPanel.revalidate();
+
         (new Thread(() -> {
             List<String> urls = GiphyAPI.searchGifs(query);
             SwingUtilities.invokeLater(() -> {
                 this.resultsPanel.removeAll();
                 if (urls.isEmpty()) {
-                    this.resultsPanel.add(new JLabel("Nic nenalezeno \ud83d\ude22"));
+                    JLabel notFound = new JLabel("Žádná data nenalezena.", SwingConstants.CENTER);
+                    notFound.setForeground(ModernTheme.DANGER);
+                    this.resultsPanel.add(notFound);
                 } else {
                     for(String url : urls) {
                         this.addGifToPanel(url);
                     }
                 }
-
                 this.resultsPanel.revalidate();
                 this.resultsPanel.repaint();
             });
@@ -80,10 +89,12 @@ public class GifPicker extends JDialog {
     }
 
     private void addGifToPanel(final String urlStr) {
-        JLabel label = new JLabel("...", 0);
-        label.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
-        label.setCursor(new Cursor(12));
+        JLabel label = new JLabel("...", SwingConstants.CENTER);
+        label.setForeground(ModernTheme.TEXT_MUTED);
+        label.setBorder(new ModernTheme.RoundedBorder(5, ModernTheme.GLASS_BORDER)); // Zakulacený rámeček
+        label.setCursor(new Cursor(Cursor.HAND_CURSOR));
         label.setPreferredSize(new Dimension(150, 150));
+
         label.addMouseListener(new MouseAdapter() {
             public void mouseClicked(MouseEvent e) {
                 GifPicker.this.chatPanel.sendGifAsImage(urlStr);
@@ -91,20 +102,20 @@ public class GifPicker extends JDialog {
             }
         });
         this.resultsPanel.add(label);
+
         this.executor.submit(() -> {
             try {
                 URL url = new URL(urlStr);
                 ImageIcon icon = new ImageIcon(url);
-                Image img = icon.getImage().getScaledInstance(180, 140, 1);
+                Image img = icon.getImage().getScaledInstance(170, 140, Image.SCALE_SMOOTH);
                 ImageIcon scaled = new ImageIcon(img);
                 SwingUtilities.invokeLater(() -> {
                     label.setText("");
                     label.setIcon(scaled);
                 });
             } catch (Exception var6) {
-                SwingUtilities.invokeLater(() -> label.setText("Chyba"));
+                SwingUtilities.invokeLater(() -> label.setText("Chyba přenosu"));
             }
-
         });
     }
 }

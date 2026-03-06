@@ -97,11 +97,32 @@ public class ChatSocketServer extends WebSocketServer {
             return;
         }
 
+        // 👇 PŘIDÁNO: Zpracování obnovy hesla (RECOVER) pro WebClienta 👇
+        if (message.startsWith("RECOVER:")) {
+            String[] parts = message.split(":", 4);
+            if (parts.length == 4) {
+                String user = parts[1];
+                String code = parts[2];
+                String newPass = parts[3];
+
+                if (DatabaseManager.resetPassword(user, newPass, code)) {
+                    conn.send("RECOVER_OK");
+                } else {
+                    conn.send("ERROR:Špatné jméno nebo Recovery Kód!");
+                }
+            } else {
+                conn.send("ERROR:Špatný formát obnovy hesla.");
+            }
+            return;
+        }
+
         String nick = webClients.get(conn);
+        // Zde byla ta chyba, která vracela ERROR:Nepřihlášen, protože to předtím zprávu RECOVER propustilo až sem!
         if (nick == null) { conn.send("ERROR:Nepřihlášen"); return; }
+
         String currentRoom = clientRooms.getOrDefault(conn, "Lobby");
 
-        // 👉 PŘIDÁNO: Zpracování AVATARA přímo tady
+        // Zpracování AVATARA
         if (message.startsWith("SET_AVATAR:")) {
             System.out.println("📸 LOG: Přijat požadavek na avatar z WEBU od: " + nick);
             String base64 = message.substring(11);
@@ -122,7 +143,7 @@ public class ChatSocketServer extends WebSocketServer {
             } catch (Exception e) {
                 System.err.println("📸 ERROR: Chyba při ukládání avatara z webu: " + e.getMessage());
             }
-            return; // Konec, tohle není zpráva do chatu
+            return;
         }
 
         if (message.startsWith("TYPING:")) {
@@ -346,7 +367,6 @@ public class ChatSocketServer extends WebSocketServer {
                 return;
             }
 
-            // Pokud zpráva začíná na MSG:, odstraníme prefix
             String contentToProcess = message.startsWith("MSG:") ? message.substring(4) : message;
 
             Server.processWebMessage(nick, contentToProcess, currentRoom);

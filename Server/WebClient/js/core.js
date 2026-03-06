@@ -1,7 +1,3 @@
-/* =========================================
-   1. CORE - Nastavení, Stav a Šifrování
-   ========================================= */
-
 if (!document.getElementById('auth-screen')) {
     throw new Error("Script stopped explicitly for landing page safety.");
 }
@@ -22,7 +18,6 @@ appConfig.load();
 
 const state = { ws: null, nick: "", isAdmin: false, currentRoom: "Lobby", activeContextUser: null, activeMessageId: null, privateTarget: null, users: [], avatars: {}, targetUser: "", isWindowActive: true, serverPublicKey: null, encryptor: new JSEncrypt(), pendingInviteId: null };
 
-// 🔥 ZERO-KNOWLEDGE MOTOR
 const cryptoAES = {
     getKey: (password) => { return CryptoJS.SHA256(password.trim()); },
     encrypt: (plainText, roomPassword) => {

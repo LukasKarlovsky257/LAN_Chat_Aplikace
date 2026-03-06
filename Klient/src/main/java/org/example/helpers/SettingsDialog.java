@@ -14,18 +14,22 @@ public class SettingsDialog extends JDialog {
 
     public SettingsDialog(Frame parent, ChatPanel chatPanel) {
         super(parent, "Nastavení", true);
-        setSize(350, 250);
+        setSize(350, 320);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout());
-        getContentPane().setBackground(new Color(240, 242, 245));
+        getContentPane().setBackground(ModernTheme.BG_BASE);
 
-        JPanel header = new JPanel();
-        header.setBackground(new Color(100, 100, 100));
-        header.setBorder(new EmptyBorder(10, 10, 10, 10));
-        JLabel title = new JLabel("Nastavení aplikace");
-        title.setForeground(Color.WHITE);
-        title.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        header.add(title);
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(new Color(15, 18, 25));
+        header.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, ModernTheme.GLASS_BORDER),
+                new EmptyBorder(15, 20, 15, 20)
+        ));
+
+        JLabel title = new JLabel("Nastavení Systému");
+        title.setForeground(ModernTheme.NEON_CYAN);
+        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        header.add(title, BorderLayout.CENTER);
         add(header, BorderLayout.NORTH);
 
         JPanel content = new JPanel();
@@ -33,23 +37,24 @@ public class SettingsDialog extends JDialog {
         content.setOpaque(false);
         content.setBorder(new EmptyBorder(20, 20, 20, 20));
 
-        soundCheck = new JCheckBox("Přehrávat zvuk při nové zprávě");
+        soundCheck = new JCheckBox("Přehrávat zvuk pípnutí zpráv");
         soundCheck.setOpaque(false);
+        soundCheck.setFocusPainted(false);
         soundCheck.setSelected(ConfigManager.playSounds);
         soundCheck.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        soundCheck.setForeground(Color.BLACK); // 🔥 Vynucen černý text
+        soundCheck.setForeground(ModernTheme.TEXT_MAIN);
 
-        JLabel colorLabel = new JLabel("Barva tvých zpráv (Bublin):");
+        JLabel colorLabel = new JLabel("Barva tvé identity (Bublin):");
         colorLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        colorLabel.setForeground(Color.BLACK); // 🔥 Vynucen černý text
+        colorLabel.setForeground(ModernTheme.TEXT_MUTED);
         colorLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         String[] colors = {"Modrá (Výchozí)", "Zelená", "Fialová", "Oranžová", "Tmavě Šedá"};
         colorBox = new JComboBox<>(colors);
-        colorBox.setMaximumSize(new Dimension(300, 30));
+        colorBox.setMaximumSize(new Dimension(300, 35));
         colorBox.setAlignmentX(Component.LEFT_ALIGNMENT);
-        colorBox.setForeground(Color.BLACK); // 🔥 Vynucen černý text
-        colorBox.setBackground(Color.WHITE);
+        colorBox.setForeground(ModernTheme.TEXT_MAIN);
+        colorBox.setBackground(ModernTheme.INPUT_BG);
 
         switch (ConfigManager.myBubbleColor) {
             case "#0084ff": colorBox.setSelectedIndex(0); break;
@@ -64,37 +69,40 @@ public class SettingsDialog extends JDialog {
         content.add(colorLabel);
         content.add(Box.createVerticalStrut(5));
         content.add(colorBox);
+        content.add(Box.createVerticalStrut(20));
+
+        // Tlačítka pro pozadí
+        JButton btnUploadBg = ModernTheme.createButton("Nahrát vlastní pozadí", false);
+        btnUploadBg.setAlignmentX(Component.LEFT_ALIGNMENT);
+        btnUploadBg.setMaximumSize(new Dimension(300, 40));
+        btnUploadBg.addActionListener(e -> {
+            chatPanel.setCustomBackground();
+            this.dispose();
+        });
+
+        JButton btnRemoveBg = ModernTheme.createButton("Smazat pozadí", false);
+        btnRemoveBg.setAlignmentX(Component.LEFT_ALIGNMENT);
+        btnRemoveBg.setMaximumSize(new Dimension(300, 40));
+        btnRemoveBg.setForeground(ModernTheme.DANGER);
+        btnRemoveBg.addActionListener(e -> {
+            chatPanel.removeCustomBackground();
+            this.dispose();
+        });
+
+        content.add(btnUploadBg);
+        content.add(Box.createVerticalStrut(10));
+        content.add(btnRemoveBg);
 
         add(content, BorderLayout.CENTER);
 
-        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 10));
         footer.setOpaque(false);
 
-        JButton saveBtn = new JButton("Uložit");
-        saveBtn.setBackground(new Color(46, 204, 113));
-        saveBtn.setForeground(Color.WHITE);
-        saveBtn.setFocusPainted(false);
-        saveBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        // 🔥 HOVER EFEKT: Černé pozadí, bílý text
-        Color origBg = saveBtn.getBackground();
-        Color origFg = saveBtn.getForeground();
-        saveBtn.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                saveBtn.setBackground(Color.BLACK);
-                saveBtn.setForeground(Color.WHITE);
-            }
-            @Override
-            public void mouseExited(MouseEvent e) {
-                saveBtn.setBackground(origBg);
-                saveBtn.setForeground(origFg);
-            }
-        });
+        JButton saveBtn = ModernTheme.createButton("Uložit Změny", true);
+        saveBtn.setBackground(ModernTheme.SUCCESS);
 
         saveBtn.addActionListener(e -> {
             ConfigManager.playSounds = soundCheck.isSelected();
-
             switch (colorBox.getSelectedIndex()) {
                 case 0: ConfigManager.myBubbleColor = "#0084ff"; break;
                 case 1: ConfigManager.myBubbleColor = "#2ecc71"; break;
@@ -102,7 +110,6 @@ public class SettingsDialog extends JDialog {
                 case 3: ConfigManager.myBubbleColor = "#e67e22"; break;
                 case 4: ConfigManager.myBubbleColor = "#34495e"; break;
             }
-
             ConfigManager.save();
             chatPanel.repaint();
             dispose();
