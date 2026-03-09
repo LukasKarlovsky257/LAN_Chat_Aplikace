@@ -3,6 +3,7 @@ package org.example.helpers;
 import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
+import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -114,6 +115,56 @@ public class ModernTheme {
         public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
             Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(color); g2.drawRoundRect(x, y, width - 1, height - 1, radius, radius); g2.dispose();
+        }
+    }
+
+    // 🔥 PŘIDÁNO: Moderní Cyberpunk ScrollBar (skryté šipky, oblý design)
+    public static class ModernScrollBarUI extends BasicScrollBarUI {
+        @Override
+        protected JButton createDecreaseButton(int orientation) {
+            return createZeroButton();
+        }
+
+        @Override
+        protected JButton createIncreaseButton(int orientation) {
+            return createZeroButton();
+        }
+
+        private JButton createZeroButton() {
+            JButton button = new JButton();
+            button.setPreferredSize(new Dimension(0, 0));
+            button.setMinimumSize(new Dimension(0, 0));
+            button.setMaximumSize(new Dimension(0, 0));
+            return button;
+        }
+
+        @Override
+        protected void paintTrack(Graphics g, JComponent c, Rectangle trackBounds) {
+            g.setColor(new Color(15, 18, 25)); // Tmavé pozadí tracku
+            g.fillRect(trackBounds.x, trackBounds.y, trackBounds.width, trackBounds.height);
+        }
+
+        @Override
+        protected void paintThumb(Graphics g, JComponent c, Rectangle thumbBounds) {
+            if (thumbBounds.isEmpty() || !scrollbar.isEnabled()) {
+                return;
+            }
+
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // Změna barvy při hoveru nebo tahání
+            if (isDragging) {
+                g2.setColor(new Color(107, 122, 144, 200));
+            } else if (isThumbRollover()) {
+                g2.setColor(new Color(107, 122, 144, 150));
+            } else {
+                g2.setColor(new Color(255, 255, 255, 30)); // Základní barva GLASS_BORDER
+            }
+
+            // Zaoblený posuvník s menšími okraji (paddingem)
+            g2.fillRoundRect(thumbBounds.x + 2, thumbBounds.y + 2, thumbBounds.width - 4, thumbBounds.height - 4, 10, 10);
+            g2.dispose();
         }
     }
 }

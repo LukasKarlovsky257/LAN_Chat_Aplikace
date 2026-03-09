@@ -20,7 +20,6 @@ public class DatabaseManager {
     }
 
     // --- 2. INICIALIZACE ---
-    // --- 2. INICIALIZACE ---
     public static void initDatabase() {
         String sqlUsers = "CREATE TABLE IF NOT EXISTS users (\n"
                 + " id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
@@ -34,7 +33,7 @@ public class DatabaseManager {
                 + " ban_reason TEXT DEFAULT '',\n"
                 + " xp INTEGER DEFAULT 0,\n"
                 + " level INTEGER DEFAULT 1,\n"
-                + " avatar_base64 TEXT\n" // Nový sloupec pro avatary
+                + " avatar_base64 TEXT\n"
                 + ");";
 
         String sqlMessages = "CREATE TABLE IF NOT EXISTS messages (\n"
@@ -53,8 +52,33 @@ public class DatabaseManager {
             stmt.execute(sqlMessages);
             System.out.println("LOG: Databáze byla úspěšně inicializována.");
             migrovatSloupce(stmt);
+
+            // 🔥 KONTROLA A VYTVOŘENÍ VÝCHOZÍHO ADMIN ÚČTU
+            createDefaultAdminIfMissing(conn);
+
         } catch (SQLException e) {
             System.out.println("CRITICAL: Chyba DB: " + e.getMessage());
+        }
+    }
+
+    // --- POMOCNÁ METODA PRO VÝCHOZÍHO ADMINA ---
+    private static void createDefaultAdminIfMissing(Connection conn) {
+        String checkSql = "SELECT COUNT(*) FROM users WHERE username = 'admin'";
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(checkSql)) {
+            if (rs.next() && rs.getInt(1) == 0) {
+                // Účet admin neexistuje, vytvoříme ho
+                String insertSql = "INSERT INTO users (username, password, recovery_hash, role) VALUES (?, ?, ?, ?)";
+                try (PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
+                    pstmt.setString(1, "admin");
+                    pstmt.setString(2, PasswordUtils.hashPassword("admin1*"));
+                    pstmt.setString(3, PasswordUtils.hashPassword("123456"));
+                    pstmt.setInt(4, 1); // 1 = Admin
+                    pstmt.executeUpdate();
+                    System.out.println("LOG: Výchozí administrátorský účet (admin / admin1*) byl vytvořen.");
+                }
+            }
+        } catch (SQLException e) {
+            System.out.println("CHYBA při vytváření výchozího admina: " + e.getMessage());
         }
     }
 
@@ -67,7 +91,7 @@ public class DatabaseManager {
                 "ALTER TABLE users ADD COLUMN role INTEGER DEFAULT 0",
                 "ALTER TABLE users ADD COLUMN xp INTEGER DEFAULT 0",
                 "ALTER TABLE users ADD COLUMN level INTEGER DEFAULT 1",
-                "ALTER TABLE users ADD COLUMN avatar_base64 TEXT", // Migrace pro existující DB
+                "ALTER TABLE users ADD COLUMN avatar_base64 TEXT",
                 "ALTER TABLE messages ADD COLUMN type TEXT DEFAULT 'TEXT'",
                 "ALTER TABLE messages ADD COLUMN file_data TEXT",
                 "ALTER TABLE messages ADD COLUMN is_burnable INTEGER DEFAULT 0"
@@ -95,7 +119,6 @@ public class DatabaseManager {
                 int currentXp = rs.getInt("xp") + amount;
                 int currentLevel = rs.getInt("level");
 
-                // Jednoduchý vzorec: každých 100 XP znamená postup o úroveň výš
                 if (currentXp >= currentLevel * 100) {
                     currentLevel++;
                 }
@@ -170,7 +193,7 @@ public class DatabaseManager {
         System.out.println("\n--- START RECOVER DEBUG ---");
         System.out.println("1. Hledám uživatele: [" + username + "]");
         System.out.println("2. Zadaný kód z webu: [" + recoveryCode + "]");
-        System.out.println("3. Zadané NOVÉ HESLO z webu: [" + newPassword + "]"); // TADY JE TA PAST!
+        System.out.println("3. Zadané NOVÉ HESLO z webu: [" + newPassword + "]");
 
         String sqlCheck = "SELECT recovery_hash FROM users WHERE username = ?";
         try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sqlCheck)) {
@@ -184,7 +207,6 @@ public class DatabaseManager {
                 if (storedRecHash != null) {
                     boolean isValid = false;
 
-                    // Pokus 1: Správné ověření přes tvoji utilitu (řeší hashe i se solí)
                     try {
                         isValid = PasswordUtils.verifyPassword(recoveryCode, storedRecHash);
                         System.out.println("5. Výsledek PasswordUtils.verifyPassword: " + isValid);
@@ -192,7 +214,6 @@ public class DatabaseManager {
                         System.out.println("5. verifyPassword hodilo chybu: " + e.getMessage());
                     }
 
-                    // Pokus 2: Zpětná kompatibilita (kdyby náhodou kód v DB nebyl hash, ale prostý text)
                     if (!isValid) {
                         isValid = storedRecHash.equals(recoveryCode);
                         if (isValid) System.out.println("5. Výsledek equals (byl to čistý text): " + isValid);
@@ -316,7 +337,6 @@ public class DatabaseManager {
                 boolean isBurnable = rs.getInt("is_burnable") == 1;
 
                 String text = rs.getString("message");
-                // Bezpečnost: V historii nikdy neukážeme obsah tajné zprávy, ani když zůstane v DB
                 if (isBurnable) {
                     text = "[SKRYTÁ ZPRÁVA]";
                 }
