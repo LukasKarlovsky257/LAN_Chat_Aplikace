@@ -118,7 +118,8 @@ public class RoomManager extends JDialog {
         btnCreate.addActionListener((e) -> {
             String newName = ModernDialog.showInput(this, "Nová místnost", "Zadejte název nového kanálu:");
             if (newName != null && !newName.trim().isEmpty()) {
-                this.switchRoom(newName.trim());
+                app.getNetwork().sendEncryptedMessage("/createroom " + newName.trim());
+                this.dispose();
             }
         });
 

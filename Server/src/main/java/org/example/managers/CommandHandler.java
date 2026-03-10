@@ -87,12 +87,19 @@ public class CommandHandler {
             case "createroom":
                 if (!args.isEmpty()) {
                     String newRoom = args.trim();
-                    if (!Server.activeRooms.contains(newRoom)) {
+                    // Zkontrolujeme, zda místnost už neexistuje
+                    if (!Server.activeRooms.contains(newRoom) && !Server.privateRooms.containsKey(newRoom) && !Server.tempRooms.contains(newRoom)) {
                         Server.activeRooms.add(newRoom);
                         client.sendEncryptedMessage("MSG:0:SYSTEM:✅ Místnost '" + newRoom + "' byla vytvořena.");
                         Server.broadcastRoomList();
+
+                        // 🔥 TADY BÝVALA CHYBA: Chyběl příkaz pro samotné přesunutí!
+                        client.joinRoom(newRoom);
                     } else {
-                        client.sendEncryptedMessage("MSG:0:SYSTEM:⚠️ Místnost s tímto názvem už existuje.");
+                        client.sendEncryptedMessage("MSG:0:SYSTEM:⚠️ Místnost s tímto názvem už existuje. Přesouvám tě do ní...");
+                        if (Server.canJoinRoom(client.getClientName(), newRoom)) {
+                            client.joinRoom(newRoom);
+                        }
                     }
                 } else {
                     client.sendEncryptedMessage("MSG:0:SYSTEM:Musíš zadat název! (/create Název)");
@@ -106,18 +113,13 @@ public class CommandHandler {
                 int count = Server.getOnlineCount();
                 client.sendEncryptedMessage("MSG:0:SYSTEM:Online (" + count + "): " + String.join(", ", onlineUsers));
 
-                // Sestavení zprávy USERS: s avatary
                 StringBuilder sb = new StringBuilder("USERS:");
-                // Zde použijeme už existujícího pole onlineUsers (obsahuje např. "Karel|Lvl2")
                 for (String userInfo : onlineUsers) {
-                    // Získáme čisté jméno (odstraníme část s levelem)
                     String u = userInfo.split("\\|")[0].trim();
-
                     int level = DatabaseManager.getUserLevel(u);
-                    String avatar = DatabaseManager.getAvatar(u); // Načtení z DB
+                    String avatar = DatabaseManager.getAvatar(u);
 
                     sb.append(u).append("|Lvl").append(level);
-                    // Pokud má avatar, přidáme ho
                     if (avatar != null && !avatar.isEmpty()) {
                         sb.append("~").append(avatar);
                     }
