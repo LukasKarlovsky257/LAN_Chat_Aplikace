@@ -37,7 +37,7 @@ public class Klient extends JFrame {
     private final String BG_FILE_PATH = "background.jpg";
 
     public Klient() {
-        super("Java Chat v15");
+        super("LAN ");
         this.setSize(1050, 750);
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setLocationRelativeTo(null);
