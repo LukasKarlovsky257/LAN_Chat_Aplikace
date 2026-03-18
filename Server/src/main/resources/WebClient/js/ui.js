@@ -476,6 +476,8 @@ const renderer = {
         else { const parts = raw.split(":"); if (!isNaN(parts[0]) && parts.length >= 3) { id = parts[0].trim(); sender = parts[1].trim(); text = parts.slice(2).join(":"); } else { sender = header; text = restOfMsg; } }
 
         if (sender !== "SYSTEM" && text.startsWith("ZK:")) {
+            if (!state.roomKeys) state.roomKeys = {};
+
             let roomSecret = state.roomKeys[state.currentRoom] || state.currentRoom;
             let decrypted = cryptoAES.decrypt(text.substring(3), roomSecret);
             text = decrypted ? decrypted : "🔒 [Šifrovaná zpráva - nelze dešifrovat]";

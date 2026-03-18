@@ -149,7 +149,7 @@ window.chat = {
         }
 
         input.value = "";
-        let roomSecret = state.roomKeys[state.currentRoom] || state.currentRoom;
+        let roomSecret = (state.roomKeys && state.roomKeys[state.currentRoom]) || state.currentRoom;
 
         if (state.privateTarget && !txt.startsWith("/")) {
             net.sendText(`/w ${state.privateTarget} ${txt}`);
