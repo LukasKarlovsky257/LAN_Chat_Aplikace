@@ -5,11 +5,10 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.Hyperlink;
-import javafx.scene.control.Label;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.VBox;
+import javafx.scene.control.*;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -30,52 +29,91 @@ public class ServerGUI extends Application {
         this.mojeIpAdresa = ziskejLanIP();
 
         BorderPane root = new BorderPane();
-        root.setStyle("-fx-background-color: #1e1e1e;");
+        root.setStyle("-fx-background-color: #0f172a; -fx-font-family: 'Segoe UI', sans-serif;"); // Moderní tmavé pozadí
 
-        VBox centerPanel = new VBox(10);
+        // --- HLAVIČKA ---
+        Label titleLabel = new Label("🛡️ LAN CHAT SERVER");
+        titleLabel.setFont(Font.font("Segoe UI", FontWeight.EXTRA_BOLD, 22));
+        titleLabel.setTextFill(Color.web("#f8fafc"));
+        HBox header = new HBox(titleLabel);
+        header.setAlignment(Pos.CENTER);
+        header.setPadding(new Insets(20, 0, 10, 0));
+        root.setTop(header);
+
+        // --- STŘEDNÍ PANEL ---
+        VBox centerPanel = new VBox(15);
         centerPanel.setAlignment(Pos.CENTER);
-        centerPanel.setPadding(new Insets(30, 20, 20, 20));
+        centerPanel.setPadding(new Insets(10, 30, 20, 30));
 
-        Label infoText = new Label("Adresa pro připojení (Web & Chat):");
-        infoText.setTextFill(Color.WHITE);
-        infoText.setFont(Font.font("Segoe UI", 16));
+        // Karta s IP adresou
+        VBox ipCard = new VBox(10);
+        ipCard.setAlignment(Pos.CENTER);
+        ipCard.setStyle("-fx-background-color: #1e293b; -fx-background-radius: 10; -fx-padding: 20; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.4), 10, 0, 0, 5);");
 
-        String odkazText = "http://" + mojeIpAdresa + ":8888/admin";
-        Hyperlink link = new Hyperlink(odkazText);
-        link.setFont(Font.font("Segoe UI", FontWeight.BOLD, 22));
-        link.setTextFill(Color.web("#4db8ff"));
-        link.setBorder(null);
+        Label infoText = new Label("Lokální IPv4 Adresa Serveru");
+        infoText.setTextFill(Color.web("#94a3b8"));
+        infoText.setFont(Font.font("Segoe UI", FontWeight.BOLD, 12));
 
-        link.setOnAction(e -> getHostServices().showDocument("http://localhost:8888/admin"));
+        Label ipLabel = new Label(mojeIpAdresa);
+        ipLabel.setTextFill(Color.web("#38bdf8"));
+        ipLabel.setFont(Font.font("Consolas", FontWeight.BOLD, 28));
 
-        Label subText = new Label("Tuto IP adresu zadej do klienta\nnebo webového prohlížeče.");
-        subText.setTextFill(Color.GRAY);
-        subText.setFont(Font.font("Segoe UI", 12));
-        subText.setStyle("-fx-text-alignment: center;");
+        Button copyBtn = new Button("📋 Kopírovat IP");
+        copyBtn.setStyle("-fx-background-color: #334155; -fx-text-fill: white; -fx-background-radius: 5; -fx-cursor: hand;");
+        copyBtn.setOnAction(e -> {
+            ClipboardContent content = new ClipboardContent();
+            content.putString(mojeIpAdresa);
+            Clipboard.getSystemClipboard().setContent(content);
+            copyBtn.setText("✔️ Zkopírováno");
+            Platform.runLater(() -> {
+                try { Thread.sleep(2000); } catch (InterruptedException ex) {}
+                Platform.runLater(() -> copyBtn.setText("📋 Kopírovat IP"));
+            });
+        });
 
-        centerPanel.getChildren().addAll(infoText, link, subText);
+        ipCard.getChildren().addAll(infoText, ipLabel, copyBtn);
+
+        // Karta s odkazy
+        VBox linksCard = new VBox(8);
+        linksCard.setAlignment(Pos.CENTER);
+        linksCard.setStyle("-fx-background-color: #1e293b; -fx-background-radius: 10; -fx-padding: 15; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.4), 10, 0, 0, 5);");
+
+        Hyperlink chatLink = new Hyperlink("💬 Otevřít Webový Chat (Port 8080)");
+        chatLink.setTextFill(Color.web("#a7f3d0"));
+        chatLink.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
+        chatLink.setOnAction(e -> getHostServices().showDocument("http://localhost:8080"));
+
+        Hyperlink adminLink = new Hyperlink("⚙️ Otevřít Admin Panel (Port 8888)");
+        adminLink.setTextFill(Color.web("#fca5a5"));
+        adminLink.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
+        adminLink.setOnAction(e -> getHostServices().showDocument("http://localhost:8888/admin"));
+
+        linksCard.getChildren().addAll(chatLink, adminLink);
+
+        centerPanel.getChildren().addAll(ipCard, linksCard);
         root.setCenter(centerPanel);
 
-        VBox bottomPanel = new VBox(10);
+        // --- SPODNÍ PANEL ---
+        VBox bottomPanel = new VBox(15);
         bottomPanel.setAlignment(Pos.CENTER);
-        bottomPanel.setPadding(new Insets(10, 50, 25, 50));
+        bottomPanel.setPadding(new Insets(10, 50, 30, 50));
 
-        statusLabel = new Label("🔴 Zastaveno");
-        statusLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 12));
-        statusLabel.setTextFill(Color.RED);
+        statusLabel = new Label("🔴 OFFLINE");
+        statusLabel.setFont(Font.font("Segoe UI", FontWeight.EXTRA_BOLD, 14));
+        statusLabel.setTextFill(Color.web("#ef4444"));
 
-        toggleButton = new Button("Spustit Server");
-        toggleButton.setFont(Font.font("Segoe UI", FontWeight.BOLD, 16));
-        toggleButton.setPrefSize(200, 45);
-        toggleButton.setCursor(javafx.scene.Cursor.HAND);
+        toggleButton = new Button("SPUSTIT SERVER");
+        toggleButton.setFont(Font.font("Segoe UI", FontWeight.EXTRA_BOLD, 16));
+        toggleButton.setPrefSize(250, 50);
+        toggleButton.setStyle("-fx-background-color: #22c55e; -fx-text-fill: white; -fx-background-radius: 8; -fx-cursor: hand;");
 
         toggleButton.setOnAction(e -> toggleServer());
 
         bottomPanel.getChildren().addAll(statusLabel, toggleButton);
         root.setBottom(bottomPanel);
 
-        Scene scene = new Scene(root, 400, 320);
-        stage.setTitle("Server Control Panel");
+        Scene scene = new Scene(root, 450, 550);
+        stage.setTitle("LAN Chat - Server Manager");
         stage.setScene(scene);
         stage.setResizable(false);
 
@@ -86,8 +124,7 @@ public class ServerGUI extends Application {
         });
 
         stage.show();
-
-        toggleServer();
+        toggleServer(); // Automatický start při spuštění aplikace
     }
 
     private void toggleServer() {
@@ -95,20 +132,20 @@ public class ServerGUI extends Application {
             Server.startServer();
             isRunning = true;
 
-            toggleButton.setText("Vypnout Server");
-            toggleButton.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-background-radius: 5;");
+            toggleButton.setText("VYPNOUT SERVER");
+            toggleButton.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-background-radius: 8; -fx-cursor: hand;");
 
-            statusLabel.setText("🟢 Běží na " + mojeIpAdresa + ":5555");
-            statusLabel.setTextFill(Color.LIGHTGREEN);
+            statusLabel.setText("🟢 ONLINE BĚŽÍ (PORT 5555, 8080, 8888)");
+            statusLabel.setTextFill(Color.web("#22c55e"));
         } else {
             Server.stopServer();
             isRunning = false;
 
-            toggleButton.setText("Zapnout Server");
-            toggleButton.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-background-radius: 5;");
+            toggleButton.setText("SPUSTIT SERVER");
+            toggleButton.setStyle("-fx-background-color: #22c55e; -fx-text-fill: white; -fx-background-radius: 8; -fx-cursor: hand;");
 
-            statusLabel.setText("🔴 Zastaveno");
-            statusLabel.setTextFill(Color.RED);
+            statusLabel.setText("🔴 OFFLINE");
+            statusLabel.setTextFill(Color.web("#ef4444"));
         }
     }
 

@@ -359,7 +359,7 @@ public class Server {
             for (ServerThread client : clients.values()) {
                 if (client.getCurrentRoom().equals(roomName)) {
                     client.setCurrentRoom("Lobby");
-                    client.sendEncryptedMessage("MSG:0:SYSTEM:⚠️ Room has been deleted.");
+                    client.sendEncryptedMessage("MSG:0:SYSTEM:⚠️ Místnost byla odstraněna.");
                 }
             }
         }
@@ -367,7 +367,7 @@ public class Server {
         tempRooms.remove(roomName);
         privateRooms.remove(roomName);
         broadcastRoomList();
-        broadcastRaw("MSG:0:SYSTEM:Room " + roomName + " deleted.", "ALL");
+        broadcastRaw("MSG:0:SYSTEM:Room " + roomName + " odstraněna.", "ALL");
     }
 
     public static String getCustomRoomList(String nick) {
@@ -471,14 +471,14 @@ public class Server {
 
     public static synchronized void registerClient(String nick, ServerThread client) {
         clients.put(nick, client);
-        sendSystemBroadcast(nick + " joined.", "Lobby");
+        sendSystemBroadcast(nick + " se připojil.", "Lobby");
         broadcastUserList();
     }
 
     public static synchronized void removeClient(String nick) {
         if (clients.containsKey(nick)) {
             clients.remove(nick);
-            sendSystemBroadcast(nick + " disconnected.", "Lobby");
+            sendSystemBroadcast(nick + " se odpojil.", "Lobby");
         }
         checkTempRooms();
         broadcastUserList();
