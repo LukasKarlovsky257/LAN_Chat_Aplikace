@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAN Chat - Web App {{APP_VERSION}}</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script src="libs/jsencrypt.min.js"></script>
+    <script src="libs/crypto-js.min.js"></script>
+
+    <script>
+        const APP_CONFIG = {
+            defaultIp: "{{DEFAULT_IP}}",
+            version: "{{APP_VERSION}}"
+        };
+    </script>
+
+    <style>
+        body {
+            background-color: var(--bg-base, #07090f);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            transition: background-image 0.5s ease;
+        }
+        #auth-screen {
+            background: rgba(7, 9, 15, 0.4) !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .auth-card {
+            background: rgba(15, 18, 25, 0.85) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+        }
+        .action-list-item span {
+            color: #ffffff !important;
+        }
+    </style>
+</head>
+<body>
+
+<div id="auth-screen">
+    <div class="auth-card">
+        <h1>Vítej v Síti</h1>
+        <div class="tabs">
+            <button id="tab-login" class="active" onclick="ui.switchAuth('login')">Přihlášení</button>
+            <button id="tab-register" onclick="ui.switchAuth('register')">Registrace</button>
+            <button id="tab-recover" onclick="ui.switchAuth('recover')">Obnova</button>
+        </div>
+
+        <div id="form-login">
+            <input type="text" id="inp-ip" placeholder="IP Serveru (např. localhost)">
+            <input type="text" id="inp-user" placeholder="Uživatelské jméno">
+            <input type="password" id="inp-pass" placeholder="Heslo">
+            <button onclick="auth.login()" class="btn-primary">Inicializovat spojení</button>
+        </div>
+
+        <div id="form-register" style="display:none">
+            <input type="text" id="reg-ip" placeholder="IP Serveru">
+            <input type="text" id="reg-user" placeholder="Nové jméno">
+            <input type="password" id="reg-pass" placeholder="Nové heslo">
+            <input type="text" id="reg-code" placeholder="Recovery Kód (pro obnovu hesla)">
+            <button onclick="auth.register()" class="btn-white">Vytvořit identitu</button>
+        </div>
+
+        <div id="form-recover" style="display:none">
+            <input type="text" id="rec-ip" placeholder="IP Serveru">
+            <input type="text" id="rec-user" placeholder="Uživatel">
+            <input type="text" id="rec-code" placeholder="Tvůj Recovery Kód">
+            <input type="password" id="rec-newpass" placeholder="Nové heslo">
+            <button onclick="auth.recover()" class="btn-orange">Obnovit přístup</button>
+        </div>
+
+        <div id="auth-status" style="color: var(--danger); margin-top: 15px; font-weight: 600; text-align:center; font-size: 14px;"></div>
+
+        <div style="margin-top: 25px; text-align:center;">
+            <a href="index.html" style="color: var(--text-muted); text-decoration: none; font-size: 12px; transition: 0.2s;">[ Zpět na hlavní portál ]</a>
+        </div>
+    </div>
+</div>
+
+<div id="app-screen" style="display:none">
+
+    <aside class="sidebar-left glass-panel">
+        <div class="brand"><span class="material-icons" style="margin-right: 8px;">hub</span> LAN SERVER</div>
+
+        <div class="label">Komunikační Kanály</div>
+        <ul id="room-list"></ul>
+        <ul style="border-top: 1px solid var(--glass-border); margin-top: auto; padding-top: 15px; flex: none;">
+            <li onclick="chat.createRoom()" class="action-list-item" style="color:#ffffff; font-weight:600;">
+                <span class="material-icons" style="font-size:18px; color: var(--success);">add_circle</span> <span>Vytvořit kanál</span>
+            </li>
+            <li onclick="chat.createTempRoom()" class="action-list-item" style="color:#ffffff; font-weight:600;">
+                <span class="material-icons" style="font-size:18px; color: var(--warning);">timer</span> <span>Dočasný kanál</span>
+            </li>
+            <li onclick="chat.createPrivateRoom()" class="action-list-item" style="color:#ffffff; font-weight:600;">
+                <span class="material-icons" style="font-size:18px; color: var(--danger);">lock</span> <span>Soukromý kanál</span>
+            </li>
+        </ul>
+
+        <div id="admin-logs-trigger" style="display:none; border-top: 1px solid var(--glass-border);">
+            <div class="label">Systémové Nástroje</div>
+            <ul style="flex: none; padding-bottom: 0;">
+                <li onclick="ui.toggleLogs(true)" class="action-list-item" style="color:#ffffff; font-weight:600;">
+                    <span class="material-icons" style="font-size:18px; color: var(--neon-cyan);">terminal</span> <span>Server Logs</span>
+                </li>
+                <li onclick="admin.broadcastPrompt()" class="action-list-item" style="color:#ffffff; font-weight:600;">
+                    <span class="material-icons" style="font-size:18px; color: var(--neon-purple);">campaign</span> <span>Globální Oznámení</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="profile-section">
+            <div class="avatar" id="my-avatar" onclick="document.getElementById('avatar-input').click()" style="cursor: pointer; position: relative; overflow: hidden;" title="Změnit avatar">U</div>
+            <div class="profile-info">
+                <span id="my-nick">User</span>
+                <span id="my-role">#0000</span>
+            </div>
+            <button onclick="ui.openSettings()" class="btn-icon" title="Nastavení systému" style="color: var(--text-muted);">
+                <span class="material-icons" style="font-size: 20px;">settings</span>
+            </button>
+            <button onclick="auth.logout()" class="btn-icon" title="Odpojit" style="color: var(--danger);">
+                <span class="material-icons" style="font-size: 20px;">power_settings_new</span>
+            </button>
+        </div>
+    </aside>
+
+    <main class="chat-area" id="main-view-chat">
+        <header class="chat-header">
+            <div style="display: flex; align-items: center;">
+                <span class="material-icons" style="color:var(--neon-cyan); margin-right:8px; font-size: 20px;">tag</span>
+                <span id="current-room" style="letter-spacing: 1px; text-transform: uppercase;">Lobby</span>
+            </div>
+            <button onclick="ui.toggleRightSidebar()" class="btn-icon" title="Přepnout panel uživatelů" style="color: var(--text-main);">
+                <span class="material-icons">group</span>
+            </button>
+        </header>
+
+        <div id="messages-box"></div>
+
+        <div class="input-wrapper-container">
+            <div class="input-island">
+                <div id="private-mode-panel" style="display:none; background:rgba(188, 19, 254, 0.15); border-bottom: 1px solid var(--glass-border); padding:10px 16px; justify-content:space-between; align-items:center;">
+                    <span id="private-mode-label" style="color:var(--neon-purple); font-weight:bold; font-size:13px; text-transform: uppercase; letter-spacing: 1px;">🔒 Zabezpečený kanál: ...</span>
+                    <button onclick="ui.cancelWhisper()" style="background:none; border:none; color:var(--neon-purple); cursor:pointer; font-weight:bold;">Zrušit [X]</button>
+                </div>
+
+                <div id="reply-preview">
+                    <div style="display: flex; flex-direction: column; overflow: hidden;">
+                        <span style="font-size: 11px; font-weight: bold; color: var(--neon-cyan); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px;">Odpověď na paket</span>
+                        <span id="reply-text" style="font-size: 13px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
+                    </div>
+                    <button onclick="cancelReply()" class="btn-icon" style="color: var(--text-muted);"><span class="material-icons">close</span></button>
+                </div>
+
+                <div class="input-wrapper">
+                    <button id="add-btn-trigger" class="btn-icon" title="Přílohy a akce..." onclick="ui.openActionModal()">
+                        <span class="material-icons" style="font-size: 24px;">add_circle_outline</span>
+                    </button>
+
+                    <input type="text" id="msg-input" maxlength="1000" placeholder="Přenést data do #Lobby..." autocomplete="off">
+
+                    <button id="send-btn" onclick="chat.send()" class="btn-icon" style="color: var(--neon-cyan)" title="Odeslat">
+                        <span class="material-icons">send</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="typing-indicator"></div>
+        </div>
+    </main>
+
+    <main class="chat-area" id="main-view-logs" style="display:none; background: #000;">
+        <header class="chat-header" style="background: #050505; color: #00f3ff; border-bottom: 1px solid #111;">
+            <div style="display: flex; align-items: center;">
+                <span class="material-icons" style="margin-right:10px">terminal</span> SYSTEM LOGS
+            </div>
+            <button onclick="ui.toggleLogs(false)" class="btn-icon" style="color:#00f3ff;">
+                <span class="material-icons">close</span>
+            </button>
+        </header>
+        <div id="logs-box" style="font-family: 'Courier New', Courier, monospace; color: #00f3ff; padding: 24px; overflow-y: auto; flex:1; line-height: 1.6; font-size: 14px;"></div>
+    </main>
+
+    <aside class="sidebar-right glass-panel">
+        <div class="label" style="padding-top: 24px;">Aktivní Entity — <span id="user-count" style="color: var(--neon-cyan);">0</span></div>
+        <ul id="user-list"></ul>
+    </aside>
+
+</div>
+
+<input type="file" id="file-input" style="display: none" onchange="chat.uploadFile()">
+<input type="file" id="avatar-input" style="display: none" accept="image/png, image/jpeg, image/gif" onchange="ui.uploadAvatar(this)">
+<input type="file" id="bg-input" style="display: none" accept="image/png, image/jpeg" onchange="ui.uploadBackground(this)">
+
+<div id="drag-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter: var(--blur); color:var(--neon-cyan); font-size:28px; font-weight:800; justify-content:center; align-items:center; z-index:9999; flex-direction: column; border: 2px dashed var(--neon-cyan);">
+    <span class="material-icons" style="font-size: 64px; margin-bottom: 20px;">cloud_upload</span>
+    INICIALIZACE PŘENOSU SOUBORU
+</div>
+
+<div id="modal-settings" class="modal">
+    <div class="modal-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px;">
+            <h3 style="margin:0; color:white; font-size: 18px; text-transform: uppercase; letter-spacing: 1px;">⚙️ Systémová Konfigurace</h3>
+            <button onclick="ui.closeModals()" class="btn-icon"><span class="material-icons">close</span></button>
+        </div>
+
+        <div style="margin-bottom: 25px;">
+            <h4 style="color: var(--neon-cyan); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px;">Vizuální rozhraní</h4>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="document.getElementById('avatar-input').click()" class="btn-secondary" style="flex: 1; padding: 10px; font-size: 12px;"><span class="material-icons" style="font-size: 16px; vertical-align: middle;">face</span> Změnit Avatar</button>
+                <button onclick="document.getElementById('bg-input').click()" class="btn-secondary" style="flex: 1; padding: 10px; font-size: 12px;"><span class="material-icons" style="font-size: 16px; vertical-align: middle;">wallpaper</span> Nahrát Pozadí</button>
+            </div>
+            <button onclick="ui.removeBackground()" class="btn-secondary" style="width: 100%; padding: 10px; font-size: 12px; margin-top: 10px; border-color: var(--danger); color: var(--danger);"><span class="material-icons" style="font-size: 16px; vertical-align: middle;">delete_outline</span> Odstranit Vlastní Pozadí</button>
+        </div>
+
+        <div style="margin-bottom: 25px;">
+            <h4 style="color: var(--neon-cyan); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px;">Chování klienta</h4>
+            <div style="display: flex; flex-direction: column; gap: 15px; color: var(--text-main);">
+                <label style="display:flex; align-items:center; gap:12px; cursor:pointer;">
+                    <input type="checkbox" id="set-sound" style="width:20px; height:20px; margin: 0; cursor: pointer; accent-color: var(--neon-cyan);"> Přehrávat zvukové alerty
+                </label>
+                <label style="display:flex; align-items:center; gap:12px; cursor:pointer;">
+                    <input type="checkbox" id="set-enter" style="width:20px; height:20px; margin: 0; cursor: pointer; accent-color: var(--neon-cyan);"> Odesílat data klávesou Enter
+                </label>
+                <label style="display:flex; align-items:center; gap:12px; cursor:pointer;">
+                    <input type="checkbox" id="set-autologin" style="width:20px; height:20px; margin: 0; cursor: pointer; accent-color: var(--neon-cyan);"> Automatické přihlášení při startu
+                </label>
+            </div>
+        </div>
+
+        <div style="display:flex; justify-content: flex-end; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+            <button onclick="ui.saveSettings()" class="btn-primary" style="width:auto; padding:10px 24px;">Uložit konfiguraci</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-actions" class="modal">
+    <div class="modal-content" style="width: 320px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px;">
+            <h3 style="margin:0; color:white; font-size: 16px; text-transform: uppercase; letter-spacing: 1px;">Přílohy</h3>
+            <button onclick="ui.closeModals()" class="btn-icon"><span class="material-icons">close</span></button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button id="upload-btn" onclick="ui.closeModals(); document.getElementById('file-input').click();" class="btn-secondary modal-action-btn">
+                <span class="material-icons" style="color: var(--success); font-size: 20px;">upload_file</span> Nahrát lokální soubor
+            </button>
+            <button id="giphy-btn" onclick="ui.closeModals(); ui.openGiphy();" class="btn-secondary modal-action-btn">
+                <span class="material-icons" style="color: var(--warning); font-size: 20px;">gif_box</span> Databáze GIFů
+            </button>
+            <button id="games-btn" onclick="ui.closeModals(); ui.openGamesDialog();" class="btn-secondary modal-action-btn">
+                <span class="material-icons" style="color: var(--neon-cyan); font-size: 20px;">sports_esports</span> Herní moduly
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-giphy" class="modal">
+    <div class="modal-content" style="width: 600px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px;">
+            <h3 style="margin:0; color:white; text-transform: uppercase; letter-spacing: 1px;">GIPHY Databáze</h3>
+            <button onclick="ui.closeModals()" class="btn-icon"><span class="material-icons">close</span></button>
+        </div>
+        <input type="text" id="giphy-search" placeholder="Zadej klíčové slovo a stiskni Enter..." onkeyup="if(event.key==='Enter') ui.searchGiphy()" style="margin-bottom:20px;">
+        <div id="giphy-results" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; height:350px; overflow-y:auto; padding-right:5px;"></div>
+    </div>
+</div>
+
+<div id="modal-ban" class="modal">
+    <div class="modal-content" style="width: 400px; border-color: var(--danger);">
+        <h3 style="margin-top:0; color: white; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 10px;">
+            <span class="material-icons" style="color: var(--danger);">gavel</span> Banovat entitu
+        </h3>
+        <p id="ban-target-name" style="margin-bottom:20px; color:var(--danger); font-weight:700; font-size: 18px;"></p>
+
+        <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px; display: block;">Trvání trestu (sekundy, -1 = trvalý)</label>
+        <input type="number" id="ban-duration" placeholder="60" value="60">
+
+        <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px; display: block;">Důvod (zaznamená se do logu)</label>
+        <input type="text" id="ban-reason" placeholder="Porušení protokolu...">
+
+        <div style="display:flex; justify-content: flex-end; gap:10px; margin-top: 15px;">
+            <button onclick="ui.closeModals()" class="btn-secondary" style="width:auto; padding:10px 20px">Zrušit</button>
+            <button onclick="admin.confirmBan()" class="btn-primary" style="background: var(--danger); box-shadow: 0 4px 15px rgba(255,42,85,0.3); width:auto; padding:10px 20px">Provést BAN</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-mute" class="modal">
+    <div class="modal-content" style="width: 400px; border-color: var(--warning);">
+        <h3 style="margin-top:0; color: white; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 10px;">
+            <span class="material-icons" style="color: var(--warning);">volume_off</span> Umlčet entitu
+        </h3>
+        <p id="mute-target-name" style="margin-bottom:20px; color:var(--warning); font-weight:700; font-size: 18px;"></p>
+
+        <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px; display: block;">Délka ztlumení (sekundy, -1 = trvalé)</label>
+        <input type="number" id="mute-duration" placeholder="60" value="60">
+
+        <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px; display: block;">Důvod (zaznamená se do logu)</label>
+        <input type="text" id="mute-reason" placeholder="Spam, urážky...">
+
+        <div style="display:flex; justify-content: flex-end; gap:10px; margin-top: 15px;">
+            <button onclick="ui.closeModals()" class="btn-secondary" style="width:auto; padding:10px 20px">Zrušit</button>
+            <button onclick="admin.confirmMute()" class="btn-primary" style="background: var(--warning); color: #000; box-shadow: 0 4px 15px rgba(250,166,26,0.3); width:auto; padding:10px 20px">Umlčet</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-games" class="modal">
+    <div class="modal-content" style="width: 420px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px;">
+            <h3 style="margin:0; color:white; display:flex; align-items:center; gap:10px; text-transform: uppercase; letter-spacing: 1px;">
+                <span class="material-icons" style="color:var(--neon-cyan);">sports_esports</span> Herní Moduly
+            </h3>
+            <button onclick="ui.closeModals()" class="btn-icon"><span class="material-icons">close</span></button>
+        </div>
+        <p style="margin-bottom:15px; color:var(--text-muted); font-size:13px; line-height: 1.5;">Zadej přesný identifikátor entity (jméno) pro výzvu. Pokud pole nevyplníš a zvolíš Kreslit, vytvoří se volné plátno pro celou místnost.</p>
+
+        <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px; display: block;">Identifikátor soupeře</label>
+        <input type="text" id="game-opponent-name" placeholder="Target_User_01">
+
+        <div style="display:flex; justify-content: flex-end; gap:10px; margin-top: 10px;">
+            <button onclick="chat.startTicTacToe()" class="btn-primary" style="background:linear-gradient(45deg, var(--success), #00b35c); box-shadow: 0 4px 15px rgba(0,230,118,0.3); width:auto; padding:10px 20px">Piškvorky</button>
+            <button onclick="chat.startWhiteboard()" class="btn-primary" style="width:auto; padding:10px 20px">Kreslit</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-invite" class="modal">
+    <div class="modal-content" style="width: 400px; text-align:center; border-color: var(--neon-cyan);">
+        <span class="material-icons" style="font-size: 48px; color: var(--neon-cyan); margin-bottom: 15px;">sports_esports</span>
+        <h3 style="margin-top:0; color:white; text-transform: uppercase; letter-spacing: 1px;">Příchozí výzva!</h3>
+        <p id="invite-text" style="margin-bottom:30px; margin-top: 10px; color:var(--text-main); font-size:15px;"></p>
+        <div style="display:flex; justify-content: center; gap:15px">
+            <button onclick="ui.declineInvite()" class="btn-secondary" style="border-color: var(--danger); color: var(--danger); width:auto; padding:10px 30px;">Odmítnout</button>
+            <button onclick="ui.acceptInvite()" class="btn-primary" style="background: linear-gradient(45deg, var(--success), #00b35c); box-shadow: 0 4px 15px rgba(0,230,118,0.3); width:auto; padding:10px 30px">Přijmout</button>
+        </div>
+    </div>
+</div>
+
+<div id="context-menu">
+    <div class="ctx-item" onclick="ctx.reply()"><span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 8px; color: var(--neon-cyan);">reply</span> Odpovědět</div>
+    <div class="ctx-item" onclick="ctx.copyNick()"><span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 8px; color: var(--text-muted);">content_copy</span> Kopírovat ID</div>
+    <div class="ctx-item" onclick="ctx.mention()"><span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 8px; color: var(--text-muted);">alternate_email</span> Zmínit (@)</div>
+    <div class="ctx-item" onclick="ctx.whisper()"><span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 8px; color: var(--neon-purple);">lock</span> Šifrovaný kanál</div>
+    <div class="ctx-item" id="ctx-invite" onclick="ctx.inviteToGame()"><span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 8px; color: var(--success);">sports_esports</span> Herní výzva</div>
+    <div class="ctx-item" id="ctx-roominvite" onclick="ctx.roomInvite()"><span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 8px; color: var(--warning);">person_add</span> Pozvat do místnosti</div>
+
+    <hr style="border:0; border-top:1px solid var(--glass-border); margin:8px 0">
+
+    <div class="ctx-item danger" id="ctx-del" onclick="ctx.deleteMsg()"><span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 8px;">delete</span> Odstranit data</div>
+    <div class="ctx-item danger" id="ctx-kick" onclick="ctx.kick()"><span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 8px;">person_remove</span> Vykázat entitu</div>
+    <div class="ctx-item danger" id="ctx-mute" onclick="ctx.mute()"><span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 8px;">volume_off</span> Zablokovat přenos</div>
+    <div class="ctx-item danger" id="ctx-ban" onclick="ctx.ban()"><span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 8px;">gavel</span> Trvalý BAN</div>
+</div>
+
+<audio id="notify-sound" src="notify.mp3"></audio>
+
+<script src="js/core.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/network.js"></script>
+<script src="js/app.js"></script>
+<script src="js/modal.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const bg = localStorage.getItem('lan_custom_bg');
+        if (bg) document.body.style.backgroundImage = `url(${bg})`;
+    });
+</script>
+
+<div id="modern-modal-overlay" class="modal-hidden">
+    <div id="modern-modal-box">
+        <div id="modern-modal-header">
+            <span id="modern-modal-title">Systémové upozornění</span>
+            <button id="modern-modal-close">&times;</button>
+        </div>
+        <div id="modern-modal-body">
+            <p id="modern-modal-message">Zde bude text zprávy.</p>
+            <input type="text" id="modern-modal-input" autocomplete="off" spellcheck="false" />
+        </div>
+        <div id="modern-modal-footer">
+            <button id="modern-modal-btn-cancel" class="modal-btn secondary">Zrušit</button>
+            <button id="modern-modal-btn-confirm" class="modal-btn primary">Potvrdit</button>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
