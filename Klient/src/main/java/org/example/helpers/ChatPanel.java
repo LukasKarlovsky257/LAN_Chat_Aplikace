@@ -999,7 +999,11 @@ public class ChatPanel extends JPanel {
     }
 
     private void renderWhiteboardUI(String data) {
-        String[] p = data.split(":");
+        // data = "GAME:WB:START:id:p1:p2" nebo jen "id:p1:p2"
+        String cleanData = data.replace("GAME:WB:START:", "").trim();
+        String[] p = cleanData.split(":");
+        if (p.length < 3) return;
+
         String id = p[0]; String p1 = p[1]; String p2 = p[2];
         if (activeGamesMap.containsKey("WB_" + id)) return;
 
@@ -1007,36 +1011,57 @@ public class ChatPanel extends JPanel {
         container.setBackground(new Color(240, 242, 245, 230));
         container.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(200, 200, 200), 1, true),
-                new EmptyBorder(10, 15, 10, 15)
+                new EmptyBorder(10, 10, 10, 10)
         ));
-        container.setMaximumSize(new Dimension(420, 380));
 
         String titleText = p2.equals("ROOM") ? "🎨 Volné plátno (od: " + p1 + ")" : "🎨 Plátno: " + p1 + " & " + p2;
         JLabel header = new JLabel(titleText, SwingConstants.CENTER);
         header.setFont(new Font("Segoe UI", Font.BOLD, 14)); header.setForeground(Color.BLACK);
         header.setBorder(new EmptyBorder(0, 0, 10, 0)); container.add(header, BorderLayout.NORTH);
 
-        BufferedImage img = new BufferedImage(400, 300, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2d = img.createGraphics(); g2d.setColor(Color.WHITE); g2d.fillRect(0, 0, 400, 300); g2d.dispose();
+        // VNITŘNÍ PLÁTNO (matematika pro síť - 800x600)
+        BufferedImage img = new BufferedImage(800, 600, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = img.createGraphics(); g2d.setColor(Color.WHITE); g2d.fillRect(0, 0, 800, 600); g2d.dispose();
         whiteboardImages.put(id, img);
 
         final String[] currentColor = {"#000000"};
 
+        // ZOBRAZOVACÍ PLÁTNO (to co vidíš ty na monitoru - 400x300)
         JPanel canvas = new JPanel() {
-            @Override protected void paintComponent(Graphics g) { super.paintComponent(g); g.drawImage(whiteboardImages.get(id), 0, 0, null); }
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                g.drawImage(whiteboardImages.get(id), 0, 0, 400, 300, null);
+            }
         };
-        canvas.setPreferredSize(new Dimension(400, 300)); canvas.setBorder(BorderFactory.createLineBorder(Color.GRAY)); canvas.setCursor(new Cursor(Cursor.CROSSHAIR_CURSOR));
+        canvas.setPreferredSize(new Dimension(400, 300));
+        canvas.setMaximumSize(new Dimension(400, 300));
+        canvas.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        canvas.setCursor(new Cursor(Cursor.CROSSHAIR_CURSOR));
 
         final Point[] lastPt = {null}; final Point[] lastNetPt = {null}; final long[] lastSend = {0};
 
-        canvas.addMouseListener(new MouseAdapter() { public void mousePressed(MouseEvent e) { lastPt[0] = e.getPoint(); lastNetPt[0] = e.getPoint(); }});
+        canvas.addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+                // Násobíme 2, abychom převedli klik z 400x300 na síťových 800x600
+                lastPt[0] = new Point(e.getX() * 2, e.getY() * 2);
+                lastNetPt[0] = new Point(e.getX() * 2, e.getY() * 2);
+            }
+        });
+
         canvas.addMouseMotionListener(new MouseMotionAdapter() {
             public void mouseDragged(MouseEvent e) {
-                if (lastPt[0] == null) return; Point pt = e.getPoint();
-                Graphics2D g = img.createGraphics(); g.setColor(Color.decode(currentColor[0]));
+                if (lastPt[0] == null) return;
+                Point pt = new Point(e.getX() * 2, e.getY() * 2);
+
+                Graphics2D g = img.createGraphics();
+                g.setColor(Color.decode(currentColor[0]));
                 int strokeSize = currentColor[0].equals("#FFFFFF") ? 12 : 3;
-                g.setStroke(new BasicStroke(strokeSize, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); g.drawLine(lastPt[0].x, lastPt[0].y, pt.x, pt.y);
-                g.dispose(); canvas.repaint();
+                g.setStroke(new BasicStroke(strokeSize, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g.drawLine(lastPt[0].x, lastPt[0].y, pt.x, pt.y);
+                g.dispose();
+                canvas.repaint();
+
                 long now = System.currentTimeMillis();
                 if (now - lastSend[0] > 40) {
                     app.getNetwork().sendRawMessage("GAME:WB:DRAW:" + id + ":" + lastNetPt[0].x + ":" + lastNetPt[0].y + ":" + pt.x + ":" + pt.y + ":" + currentColor[0]);
@@ -1046,47 +1071,80 @@ public class ChatPanel extends JPanel {
             }
         });
 
-        JPanel tools = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5)); tools.setOpaque(false);
+        JPanel tools = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 5)); tools.setOpaque(false);
         JButton btnBlack = ModernTheme.createChatButton("Černá", Color.BLACK); btnBlack.addActionListener(e -> currentColor[0] = "#000000");
-        JButton btnBlue = ModernTheme.createChatButton("Modrá", ModernTheme.NEON_CYAN); btnBlue.addActionListener(e -> currentColor[0] = "#5865F2");
-        JButton btnRed = ModernTheme.createChatButton("Červená", ModernTheme.DANGER); btnRed.addActionListener(e -> currentColor[0] = "#ed4245");
+        JButton btnBlue = ModernTheme.createChatButton("Modrá", ModernTheme.NEON_CYAN); btnBlue.addActionListener(e -> currentColor[0] = "#0077FF");
+        JButton btnRed = ModernTheme.createChatButton("Červená", ModernTheme.DANGER); btnRed.addActionListener(e -> currentColor[0] = "#FF2A55");
         JButton btnEraser = ModernTheme.createChatButton("Guma", Color.WHITE); btnEraser.addActionListener(e -> currentColor[0] = "#FFFFFF");
-        JButton btnClear = ModernTheme.createChatButton("Vymazat", ModernTheme.DANGER); btnClear.addActionListener(e -> app.getNetwork().sendRawMessage("GAME:WB:CLEAR:" + id));
-        JButton btnClose = ModernTheme.createChatButton("Zavřít", Color.GRAY); btnClose.addActionListener(e -> app.getNetwork().sendRawMessage("GAME:WB:CLOSE:" + id));
+
+        JButton btnClear = ModernTheme.createChatButton("Vymazat", ModernTheme.DANGER);
+        btnClear.addActionListener(e -> { handleWhiteboardClear(id); app.getNetwork().sendRawMessage("GAME:WB:CLEAR:" + id); });
+
+        JButton btnClose = ModernTheme.createChatButton("Zavřít", Color.GRAY);
+        btnClose.addActionListener(e -> { handleWhiteboardClose(id); app.getNetwork().sendRawMessage("GAME:WB:CLOSE:" + id); });
 
         tools.add(btnBlack); tools.add(btnBlue); tools.add(btnRed); tools.add(btnEraser); tools.add(btnClear); tools.add(btnClose);
-        container.add(canvas, BorderLayout.CENTER); container.add(tools, BorderLayout.SOUTH); activeGamesMap.put("WB_" + id, container);
+        container.add(canvas, BorderLayout.CENTER); container.add(tools, BorderLayout.SOUTH);
+        activeGamesMap.put("WB_" + id, container);
 
-        JPanel row = new JPanel(); row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS)); row.setOpaque(false); row.setBorder(new EmptyBorder(10, 0, 10, 0));
-        row.add(Box.createHorizontalGlue()); row.add(container); row.add(Box.createHorizontalGlue());
+        // Obalení, aby to neroztáhlo chat
+        JPanel wrapper = new JPanel(new BorderLayout()); wrapper.setOpaque(false); wrapper.add(container, BorderLayout.WEST);
+        JPanel row = new JPanel(new BorderLayout()); row.setOpaque(false); row.setBorder(new EmptyBorder(10, 10, 10, 10)); row.add(wrapper, BorderLayout.CENTER);
+
+        // Trik pro snadné smazání přesně tohoto kontejneru!
+        container.putClientProperty("WrapperRow", row);
+
         this.messagesBox.add(row); this.messagesBox.add(Box.createVerticalStrut(5));
         this.messagesBox.revalidate(); this.messagesBox.repaint();
         SwingUtilities.invokeLater(() -> this.scrollPane.getVerticalScrollBar().setValue(this.scrollPane.getVerticalScrollBar().getMaximum()));
     }
 
-    private void handleWhiteboardDraw(String data) {
-        String[] p = data.split(":");
+    private void handleWhiteboardDraw(String fullMessage) {
+        // Bezpečné oříznutí hlavičky, aby nedošlo k chybě parsování čísel
+        String cleanMsg = fullMessage.replace("GAME:WB:DRAW:", "").trim();
+        String[] p = cleanMsg.split(":");
         if (p.length < 6) return;
-        String id = p[0]; int x1 = Integer.parseInt(p[1]); int y1 = Integer.parseInt(p[2]); int x2 = Integer.parseInt(p[3]); int y2 = Integer.parseInt(p[4]); String color = p[5];
+
+        String id = p[0];
+        int x1 = Integer.parseInt(p[1]); int y1 = Integer.parseInt(p[2]);
+        int x2 = Integer.parseInt(p[3]); int y2 = Integer.parseInt(p[4]);
+        String color = p[5];
+
         BufferedImage img = whiteboardImages.get(id);
         if (img != null) {
-            Graphics2D g = img.createGraphics(); g.setColor(Color.decode(color)); int strokeSize = color.equals("#FFFFFF") ? 12 : 3;
-            g.setStroke(new BasicStroke(strokeSize, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); g.drawLine(x1, y1, x2, y2); g.dispose();
-            JPanel pan = activeGamesMap.get("WB_" + id); if (pan != null) pan.repaint();
+            Graphics2D g = img.createGraphics(); g.setColor(Color.decode(color));
+            int strokeSize = color.equals("#FFFFFF") ? 12 : 3;
+            g.setStroke(new BasicStroke(strokeSize, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g.drawLine(x1, y1, x2, y2); g.dispose();
+
+            JPanel pan = activeGamesMap.get("WB_" + id);
+            if (pan != null) pan.repaint();
         }
     }
 
-    private void handleWhiteboardClear(String id) {
+    private void handleWhiteboardClear(String fullMessage) {
+        String id = fullMessage.replace("GAME:WB:CLEAR:", "").trim();
         BufferedImage img = whiteboardImages.get(id);
         if (img != null) {
-            Graphics2D g = img.createGraphics(); g.setColor(Color.WHITE); g.fillRect(0, 0, 400, 300); g.dispose();
-            JPanel pan = activeGamesMap.get("WB_" + id); if (pan != null) pan.repaint();
+            Graphics2D g = img.createGraphics(); g.setColor(Color.WHITE); g.fillRect(0, 0, 800, 600); g.dispose();
+            JPanel pan = activeGamesMap.get("WB_" + id);
+            if (pan != null) pan.repaint();
         }
     }
 
-    private void handleWhiteboardClose(String id) {
+    private void handleWhiteboardClose(String fullMessage) {
+        String id = fullMessage.replace("GAME:WB:CLOSE:", "").trim();
         JPanel pan = activeGamesMap.remove("WB_" + id);
-        if (pan != null) { Container parent = pan.getParent(); if (parent != null) { this.messagesBox.remove(parent); this.messagesBox.revalidate(); this.messagesBox.repaint(); } }
+        if (pan != null) {
+            // Získáme přesnou obálku, kterou jsme si uložili, a smažeme ji
+            JPanel row = (JPanel) pan.getClientProperty("WrapperRow");
+            if (row != null && row.getParent() != null) {
+                Container parent = row.getParent();
+                parent.remove(row);
+                parent.revalidate();
+                parent.repaint();
+            }
+        }
         whiteboardImages.remove(id);
     }
 
@@ -1105,19 +1163,24 @@ public class ChatPanel extends JPanel {
 
     private void uploadAvatar() {
         javax.swing.JFileChooser fileChooser = new javax.swing.JFileChooser();
-        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Images", "jpg", "png", "jpeg"));
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Images (*.jpg, *.jpeg, *.png, *.webp)", "jpg", "jpeg", "png", "webp"));
+
         int result = fileChooser.showOpenDialog(this);
         if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
             java.io.File file = fileChooser.getSelectedFile();
             if (file.length() > 2 * 1024 * 1024) {
-                ModernDialog.showMessage(SwingUtilities.getWindowAncestor(this), "Chyba", "Obrázek je příliš velký (Max 2MB).", true);
+                ModernDialog.showMessage(javax.swing.SwingUtilities.getWindowAncestor(this), "Chyba", "Obrázek je příliš velký (Max 2MB).", true);
                 return;
             }
+
             try {
                 byte[] fileContent = java.nio.file.Files.readAllBytes(file.toPath());
                 String base64 = java.util.Base64.getEncoder().encodeToString(fileContent);
                 app.getNetwork().sendRawMessage("SET_AVATAR:" + base64);
-            } catch (Exception ex) { ex.printStackTrace(); }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                ModernDialog.showMessage(javax.swing.SwingUtilities.getWindowAncestor(this), "Chyba", "Nepodařilo se načíst soubor.", true);
+            }
         }
     }
 

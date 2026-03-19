@@ -375,7 +375,7 @@ const renderer = {
             <div style="background: var(--glass-bg); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); padding: 20px; border-radius: 16px; border: 1px solid var(--glass-border); text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
                 <div style="color: var(--text-main); font-weight: bold; margin-bottom: 12px; font-size: 16px; letter-spacing: 1px;">${titleText}</div>
                 <div style="background: white; border-radius: 8px; border: 1px solid rgba(0,0,0,0.2); display: inline-block; overflow: hidden;">
-                    <canvas id="wb-canvas-${id}" width="500" height="350" style="cursor: crosshair; touch-action: none; display: block;" data-color="#000000"></canvas>
+                    <canvas id="wb-canvas-${id}" width="800" height="600" style="width: 100%; max-width: 800px; aspect-ratio: 4/3; cursor: crosshair; touch-action: none; display: block; background: white;" data-color="#000000"></canvas>
                 </div>
                 <div style="margin-top: 15px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
                     <button onclick="document.getElementById('wb-canvas-${id}').dataset.color = '#000000'" style="background: #000000; color: white; border: 1px solid var(--glass-border); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold;">Černá</button>
