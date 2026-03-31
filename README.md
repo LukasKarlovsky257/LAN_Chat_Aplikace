@@ -1,4 +1,4 @@
-# 🚀 LAN CHAT ULTIMATE v7.0
+# 🚀 LAN CHAT ULTIMATE
 
 Moderní, plně synchronizovaná a bezpečná multiplatformní chatovací aplikace. Spojuje nativní **Java Desktop** klient a moderní **Webové rozhraní** do jednoho plynulého ekosystému s podporou real-time mini-her a Zero-Knowledge šifrováním.
 
@@ -60,15 +60,15 @@ Uživatelé mohou v chatu využívat následující `/` příkazy:
 ## 🚀 Jak spustit projekt
 
 ### 1. Server
-1. Zkompilujte a spusťte hlavní třídu `Server.java`.
+1. Stáhněte a spusťte hlavní třídu `Server.exe`.
 2. Server automaticky spustí WebSocket na portu `8887` a Webový HTTP server na portu `8080`.
 
 ### 2. Desktopový klient
-1. Spusťte třídu `Klient.java`.
+1. Stáhněte třídu `Klient.exe`.
 2. Vyplňte IP adresu serveru (např. `localhost`), jméno a heslo.
 3. Chatujte a hrajte!
 
 ### 3. Webový klient
 1. Otevřete webový prohlížeč a zadejte `http://localhost:8080` (nebo IP adresu serveru).
 2. Přihlaste se svými údaji.
-3. Webový klient je plně synchronizován s desktopovou verzí. Pro přístup k Admin logům navštivte `http://localhost:8080/admin`.
+3. Webový klient je plně synchronizován s desktopovou verzí. Pro přístup k Admin logům navštivte `http://localhost:8888`.
